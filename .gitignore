@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ============================================
+# 江南百景图 钓鱼脚本 项目特定忽略规则
+# ============================================
+# 运行日志
+fishing_log.txt
+*.log
+
+# 调试截图（脚本运行时自动生成）
+screenshots/*.png
+screenshots/*.jpg
+
+# 超时通知文件
+alert.txt
+
+# 临时文件
+*.tmp
+tempCodeRunnerFile.py

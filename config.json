@@ -1,0 +1,60 @@
+{
+  "adb": {
+    "device": "emulator-5554",
+    "path": "D:/leidian/LDPlayer9/adb.exe"
+  },
+  "screen": {
+    "width": 1920,
+    "height": 1080
+  },
+  "disc": {
+    "center_x": 1535,
+    "center_y": 505,
+    "outer_radius": 170,
+    "bead_radius": 135
+  },
+  "zones": {
+    "blue_start": 290,
+    "blue_end": 230,
+    "yellow_start": 320,
+    "yellow_end": 360
+  },
+  "buttons": {
+        "reel_x": 958,
+        "reel_y": 931,
+        "claim_x": 772,
+        "claim_y": 854,
+        "retry_x": 1141,
+        "retry_y": 854
+  },
+  "detection": {
+        "bead_brightness_min": 200,
+        "bead_min_area": 10,
+        "bead_max_area": 120,
+        "bead_circularity_min": 0.55,
+        "bead_track_tolerance": 20,
+        "match_threshold": 0.80,
+    "disc_lost_timeout": 4.0,
+    "bead_miss_threshold": 8,
+    "result_wait": 2.0,
+    "restart_wait": 2.5
+  },
+  "timing": {
+    "screenshot_cooldown": 0.06,
+    "min_click_interval": 0.20,
+    "animation_wait": 0.3,
+    "popup_wait": 0.8,
+    "idle_timeout": 15.0,
+    "activity_timeout": 60.0
+  },
+  "fishing": {
+    "max_rounds": 999,
+    "prefer_yellow": true,
+    "click_blue_probability": 1.0
+  },
+  "retry": {
+    "retry_on_failure": true,
+    "max_retries": 0,
+    "retry_delay": 2.0
+  }
+}
