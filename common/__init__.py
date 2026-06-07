@@ -6,10 +6,12 @@ from .paths import SCRIPT_DIR, TEMPLATE_DIR, SCREENSHOT_DIR, CONFIG_FILE, LOG_FI
 from .adb import ADB, find_adb, detect_device
 from .vision import Vision
 from .config import load_config, save_config, DEFAULT_CONFIG
+from .ocr import OCREngine, create_ocr_engine, detect_engine as detect_ocr_engine
 
 __all__ = [
     "SCRIPT_DIR", "TEMPLATE_DIR", "SCREENSHOT_DIR", "CONFIG_FILE", "LOG_FILE",
     "ADB", "find_adb", "detect_device",
     "Vision",
     "load_config", "save_config", "DEFAULT_CONFIG",
+    "OCREngine", "create_ocr_engine", "detect_ocr_engine",
 ]

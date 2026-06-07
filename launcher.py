@@ -6,28 +6,30 @@
  环境：雷电模拟器9 + ADB + Python + OpenCV
  运行平台：Windows
 
-【v4.0 更新说明】（模块化重构 + 状态府切换完整实现）
+【v4.1 更新说明】（OCR 文字识别完整实现）
   1. ★ 模块化架构：公共模块(common) + 功能模块(fishing/map_switch/travel_bag)
   2. ★ 统一入口 launcher.py：通过子命令切换不同功能
-  3. ★ 大地图州府切换（map_switch/prefecture.py — 完整实现）
-  4.  行囊城镇切换骨架（travel_bag/town_switch.py — 待截图实现）
-  5. ★ Vision 新增: find_red_buttons()、find_text_regions()（v4.0 新增）
+  3. ★ 大地图州府切换 OCR 完整实现（PaddleOCR / EasyOCR / MSER 三引擎）
+  4. ★ common/ocr.py — OCR 工具模块（自动检测引擎、统一识别接口）
+  5. ★ 多模式降级：OCR → 坐标 → 模板，自动按序尝试
+  6.  行囊城镇切换骨架（travel_bag/town_switch.py — 待截图实现）
 
 【模块依赖】
   - common/adb.py        → ADB 操作封装
   - common/config.py     → 配置加载/保存
   - common/paths.py      → 路径常量
   - common/vision.py     → 视觉识别（光珠/模板/红色按钮/MSER）
+  - common/ocr.py        → OCR 文字识别（PaddleOCR/EasyOCR/MSER 三引擎）
   - fishing/bot.py       → 钓鱼状态机
-  - map_switch/prefecture.py   → 州府切换（坐标/模板/MSER 三模式）
+  - map_switch/prefecture.py   → 州府切换（OCR/坐标/模板 三模式降级）
   - travel_bag/town_switch.py → 城镇切换（骨架）
 
 【使用方法】
   python launcher.py fish                 # 启动钓鱼脚本
   python launcher.py fish --retry         # 从"再来一次"开始钓鱼
-  python launcher.py switch-prefecture    # 切换州府
-  python launcher.py switch-prefecture --target 白雪镇  # 指定目标
-  python launcher.py diagnose-map         # 州府坐标诊断
+  python launcher.py switch-prefecture    # 切换州府（OCR 文字识别优先）
+  python launcher.py switch-prefecture --target 苏州府  # 指定目标
+  python launcher.py diagnose-map         # 截图+OCR诊断（推荐首次运行）
   python launcher.py switch-town          # 切换城镇（骨架）
   python launcher.py test                 # 测试各模块
   python launcher.py calibrate            # 交互式坐标校准

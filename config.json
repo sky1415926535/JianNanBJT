@@ -59,11 +59,20 @@
   },
   "prefecture": {
     "target": "白雪镇",
-    "mode": "coordinate",
-    "big_map_enter_btn": {"x": 120, "y": 980, "comment": "大地图入口按钮坐标"},
-    "big_map_indicator": {"x": 960, "y": 30, "comment": "大地图界面特征检测点(如顶部导航栏)"},
+    "mode": "ocr",
+    "mode_order": ["ocr", "coordinate", "template"],
+    "big_map_enter_btn": {"x": 120, "y": 980, "comment": "大地图入口按钮坐标(左下角应天府印→大地图)"},
+    "big_map_indicator": {"x": 960, "y": 30, "comment": "大地图界面特征检测点"},
     "default_confirm_btn": {"x": 960, "y": 600, "comment": "通用确认进入按钮"},
     "loading_wait": 3.0,
+    "ocr_search": {
+      "max_swipes": 5,
+      "swipe_distance": 250,
+      "swipe_interval": 0.8,
+      "min_conf": 0.4,
+      "fuzzy_match": true,
+      "comment": "OCR文字识别搜索参数"
+    },
     "map_search": {
       "max_swipes": 8,
       "swipe_distance": 300,
@@ -74,16 +83,60 @@
     },
     "prefectures": {
       "白雪镇": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图上该州府的坐标【待配置】"},
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
         "confirm_btn": null,
-        "search_templates": ["baixue_pref.png"],
-        "comment": "白雪镇州府配置"
+        "search_templates": [],
+        "aliases": ["白雪"],
+        "comment": "白雪镇(DLC活动州府)"
       },
       "应天府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图上该州府的坐标【待配置】"},
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
         "confirm_btn": null,
-        "search_templates": ["yingtian_pref.png"],
-        "comment": "应天府州府配置(示例)"
+        "search_templates": [],
+        "aliases": ["应天"],
+        "comment": "初始州府(0级解锁)"
+      },
+      "苏州府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": [],
+        "aliases": ["苏州"],
+        "comment": "17级解锁"
+      },
+      "杭州府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": [],
+        "aliases": ["杭州"],
+        "comment": "27级解锁"
+      },
+      "松江府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": [],
+        "aliases": ["松江"],
+        "comment": "37级解锁"
+      },
+      "徽州府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": [],
+        "aliases": ["徽州"],
+        "comment": "47级解锁"
+      },
+      "扬州府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": [],
+        "aliases": ["扬州"],
+        "comment": "54级解锁"
+      },
+      "绍兴府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": [],
+        "aliases": ["绍兴"],
+        "comment": "60级解锁"
       }
     }
   }

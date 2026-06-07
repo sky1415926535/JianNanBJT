@@ -1,6 +1,6 @@
 """
-大地图州府切换模块 (v4.0 完整实现)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+大地图州府切换模块 (v4.1 — OCR 文字识别完整实现)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 功能：在大地图上定位并切换到目标州府。
 
@@ -10,8 +10,8 @@
   Step 2 — 定位州府
            截图 → 三种模式按优先级尝试:
              Mode 1: 坐标直点（最快，需预配置坐标）
-             Mode 2: 模板匹配 + 滑动搜索（需模板截图）
-             Mode 3: MSER 文字检测（需 OCR，预留）
+             Mode 2: OCR 文字识别 + 滑动搜索（v4.1 完整实现）
+             Mode 3: 模板匹配 + 滑动搜索（需模板截图）
   Step 3 — 点击州府标记
            执行 ADB.tap(map_coord)
   Step 4 — 确认弹窗
@@ -19,34 +19,54 @@
   Step 5 — 等待加载
            等待城镇界面加载完成
 
+OCR 引擎（v4.1 新增）:
+  - 优先级: PaddleOCR → EasyOCR → MSER-only
+  - PaddleOCR: 中文精度最高，推荐安装 (pip install paddlepaddle paddleocr)
+  - EasyOCR: 备选方案 (pip install easyocr)
+  - MSER-only: 仅检测文字区域位置，不识别内容（降级方案）
+
 配置结构 (config.json → prefecture):
   {
     "target": "白雪镇",                    # 默认目标州府
-    "mode": "coordinate",                  # 定位模式: coordinate / template / mser
+    "mode": "ocr",                         # 定位模式: coordinate / ocr / template
+    "mode_order": ["ocr", "coordinate", "template"],  # 模式降级顺序
     "big_map_enter_btn": {"x": N, "y": N}, # 大地图按钮坐标
     "big_map_indicator": {"x": N, "y": N}, # 特征检测点
     "default_confirm_btn": {"x": N, "y": N}, # 通用确认按钮
     "loading_wait": 3.0,                   # 加载等待时间
+    "ocr_search": {                        # OCR 文字搜索参数
+      "max_swipes": 5,
+      "swipe_distance": 250,
+      "swipe_interval": 0.8,
+      "mins_conf": 0.4,
+      "fuzzy_match": true
+    },
     "map_search": {                        # 模板匹配搜索参数
       "max_swipes": 8,
       "swipe_distance": 300,
       "swipe_interval": 0.8,
-      "directions": ["up", "down", "left", "right"],
-      "match_threshold": 0.75
+      "directions": ["up","down","left","right"],
+      "match_threshold": 0.75,
+      "search_area": {"x":200,"y":100,"w":1520,"h":800}
     },
     "prefectures": {                       # 州府列表
       "<name>": {
-        "map_coord": {"x": N, "y": N},     # 大地图上的坐标
-        "confirm_btn": {"x": N, "y": N},   # 确认按钮(可选, 回退到 default)
-        "search_templates": ["xxx.png"]    # 模板匹配用图片
+        "map_coord": {"x": N, "y": N},     # 大地图上的坐标（coordinate 模式用）
+        "confirm_btn": {"x": N, "y": N},   # 确认按钮（可选）
+        "search_templates": ["xxx.png"],   # 模板匹配用图片
+        "aliases": ["苏州", "姑苏"]         # 别名列表（OCR 模糊匹配增强）
       }
     }
   }
 
+所有已知州府（按解锁顺序）:
+  应天府(初始), 苏州府(17级), 杭州府(27级), 松江府(37级),
+  徽州府(47级), 扬州府(54级), 绍兴府(60级), 白雪镇(DLC)
+
 使用方式:
-  python launcher.py switch-prefecture --target 白雪镇
-  python launcher.py switch-prefecture          # 使用配置中的 target 默认值
-  python launcher.py diagnose-map               # 坐标诊断模式(截图+鼠标标记)
+  python launcher.py switch-prefecture --target 苏州府
+  python launcher.py switch-prefecture              # 使用配置默认值
+  python launcher.py diagnose-map                   # 坐标诊断模式
 """
 
 import time
@@ -54,8 +74,23 @@ import logging
 from pathlib import Path
 
 from common import ADB, Vision, load_config, SCREENSHOT_DIR
+from common.ocr import OCREngine, detect_engine, get_ocr_install_hint
 
 log = logging.getLogger("MapSwitch")
+
+# 全局 OCR 引擎实例（懒加载，避免重复初始化）
+_OCR_ENGINE = None
+
+
+def _get_ocr(cfg=None):
+    """获取全局 OCR 引擎实例（懒加载）。"""
+    global _OCR_ENGINE
+    if _OCR_ENGINE is None:
+        engine_mode = detect_engine()
+        if engine_mode == "mser_only":
+            log.warning(get_ocr_install_hint())
+        _OCR_ENGINE = OCREngine()
+    return _OCR_ENGINE
 
 
 class PrefectureSwitcher:
@@ -72,9 +107,10 @@ class PrefectureSwitcher:
         self.cfg = cfg or load_config()
         self.pref_cfg = self.cfg.get("prefecture", {})
         self.target = self.pref_cfg.get("target", "白雪镇")
-        self.mode = self.pref_cfg.get("mode", "coordinate")
+        self.mode = self.pref_cfg.get("mode", "ocr")
         self.vision = Vision(self.cfg)
-        self._last_swipe_dir_idx = 0  # 滑动方向轮转索引
+        self.ocr = _get_ocr(self.cfg)
+        self._last_swipe_dir_idx = 0
 
     # ----------------------------------------------------------------
     # 主入口
@@ -84,10 +120,10 @@ class PrefectureSwitcher:
         切换到目标州府（完整流程入口）。
 
         执行流程:
-          1. _ensure_on_big_map()   → 确保在大地图界面
-          2. _navigate_to(target)   → 定位并点击目标州府
+          1. _ensure_on_big_map()    → 确保在大地图界面
+          2. _navigate_to(target)    → 定位并点击目标州府（多模式降级）
           3. _handle_confirm_popup() → 处理确认弹窗
-          4. _wait_for_loading()    → 等待城镇加载
+          4. _wait_for_loading()     → 等待城镇加载
 
         参数:
           target: str | None，州府名称。None 使用配置中的 target 默认值。
@@ -96,16 +132,16 @@ class PrefectureSwitcher:
           bool: 切换成功为 True。
         """
         target = target or self.target
-        log.info(f"[州府切换] 目标: {target} (模式: {self.mode})")
+        log.info(f"[州府切换] 目标: {target} (主模式: {self.mode}, OCR引擎: {self.ocr.engine_name})")
 
         # ---- Step 1: 进入大地图 ----
         if not self._ensure_on_big_map():
             log.error("[州府切换] 无法进入大地图界面")
             return False
 
-        # ---- Step 2: 定位目标州府 ----
+        # ---- Step 2: 定位目标州府（多模式降级） ----
         if not self._navigate_to(target):
-            log.error(f"[州府切换] 未找到州府: {target}")
+            log.error(f"[州府切换] 所有模式均未找到州府: {target}")
             return False
 
         # ---- Step 3: 确认弹窗 ----
@@ -146,30 +182,25 @@ class PrefectureSwitcher:
                 time.sleep(0.5)
                 continue
 
-            # 检测是否已在大地图
             if self._is_on_big_map(img):
                 log.info("[大地图] 已在大地图界面")
                 return True
 
-            # 点击大地图按钮
             log.info(f"[大地图] 尝试进入 (第{attempt + 1}次)，点击 ({enter_x}, {enter_y})")
             ADB.tap(enter_x, enter_y)
             time.sleep(self.pref_cfg.get("loading_wait", 2.0))
 
         log.warning("[大地图] 多次尝试后仍未检测到大地图界面，假设已进入")
-        return True  # 宽松策略：不因检测失败而卡死
+        return True
 
     def _is_on_big_map(self, img):
         """
         检测当前是否在大地图界面。
 
         检测策略（按优先级）:
-          1. 模板匹配：检测预置的大地图特征图（big_map_navbar.png）
-          2. 特征点颜色检测：采样 big_map_indicator 坐标的颜色
-          3. 行囊按钮检测：搜索行囊按钮特征
-
-        参数:
-          img: BGR 格式 numpy 数组。
+          1. 模板匹配：检测预置的大地图特征图
+          2. 行囊按钮检测：搜索行囊按钮特征
+          3. 文字区域密度检测：大地图上州府名称文字较多
 
         返回:
           bool: True 表示当前在大地图。
@@ -181,31 +212,33 @@ class PrefectureSwitcher:
             log.info(f"[大地图检测] 模板匹配: 置信度 {conf:.2f}")
             return True
 
-        # 策略2: 特征点颜色采样（预留）
-        # indicator = self.pref_cfg.get("big_map_indicator", {})
-        # px = img[indicator.get("y", 30), indicator.get("x", 960)]
-        # ... 颜色比对逻辑
-
-        # 策略3: 行囊按钮存在 = 说明在主地图界面
+        # 策略2: 行囊按钮存在 = 说明在主地图界面
         match_bag = self.vision.match_template(img, "travel_bag_btn.png")
         if match_bag:
             _, _, conf = match_bag
             log.info(f"[大地图检测] 检测到行囊按钮: 置信度 {conf:.2f}")
             return True
 
+        # 策略3: 文字区域数量检测（大地图上通常有多个州府名称文字）
+        # 在大地图中心区域搜索，如果有 >= 2 个文字区域则判定为大地图
+        h, w = img.shape[:2]
+        roi = (w // 4, h // 4, w // 2, h // 2)
+        text_regions = self.vision.find_text_regions(img, roi=roi, color_filter=True)
+        if len(text_regions) >= 2:
+            log.info(f"[大地图检测] 检测到 {len(text_regions)} 个文字区域（推测为大地图）")
+            return True
+
         return False
 
     # ----------------------------------------------------------------
-    # Step 2: 定位目标州府
+    # Step 2: 定位目标州府（多模式降级）
     # ----------------------------------------------------------------
     def _navigate_to(self, target):
         """
-        在大地图上定位并点击目标州府。
+        在大地图上定位并点击目标州府（多模式降级策略）。
 
-        模式分发:
-          - mode="coordinate"  → _try_coordinate_mode()
-          - mode="template"    → _try_template_search()
-          - mode="mser"        → _try_mser_search() (预留)
+        使用 config.json → prefecture.mode_order 定义的模式顺序，
+        逐个尝试直到成功。默认顺序: ["ocr", "coordinate", "template"]
 
         参数:
           target: str，目标州府名称。
@@ -215,18 +248,28 @@ class PrefectureSwitcher:
         """
         pref_info = self.pref_cfg.get("prefectures", {}).get(target)
         if pref_info is None:
-            log.error(f"[定位] 未找到州府配置: {target}，请在 config.json prefecture.prefectures 中添加")
+            log.error(f"[定位] 未找到州府配置: {target}")
             return False
 
-        if self.mode == "coordinate":
-            return self._try_coordinate_mode(target, pref_info)
-        elif self.mode == "template":
-            return self._try_template_search(target, pref_info)
-        elif self.mode == "mser":
-            return self._try_mser_search(target, pref_info)
-        else:
-            log.error(f"[定位] 未知模式: {self.mode}")
-            return False
+        # 模式降级顺序
+        mode_order = self.pref_cfg.get("mode_order", ["ocr", "coordinate", "template"])
+
+        for mode in mode_order:
+            log.info(f"[定位] 尝试模式: {mode}")
+            if mode == "ocr":
+                if self._try_ocr_search(target, pref_info):
+                    return True
+            elif mode == "coordinate":
+                if self._try_coordinate_mode(target, pref_info):
+                    return True
+            elif mode == "template":
+                if self._try_template_search(target, pref_info):
+                    return True
+            else:
+                log.warning(f"[定位] 未知模式: {mode}，跳过")
+            log.info(f"[定位] 模式 '{mode}' 未找到，尝试下一个...")
+
+        return False
 
     # ================================================================
     # Mode 1: 坐标直点
@@ -253,8 +296,7 @@ class PrefectureSwitcher:
         if px == 0 and py == 0:
             log.error(
                 f"[坐标模式] 州府 '{target}' 未配置 map_coord！\n"
-                f"  请在大地图截图中获取坐标后填入 config.json"
-                f" → prefecture.prefectures.{target}.map_coord"
+                f"  请运行 python launcher.py diagnose-map 获取坐标后填入 config.json"
             )
             return False
 
@@ -264,7 +306,135 @@ class PrefectureSwitcher:
         return True
 
     # ================================================================
-    # Mode 2: 模板匹配 + 滑动搜索
+    # Mode 2: OCR 文字识别 + 滑动搜索（v4.1 完整实现）
+    # ================================================================
+    def _try_ocr_search(self, target, pref_info):
+        """
+        使用 OCR 文字识别在大地图中搜索目标州府名称。
+
+        这是 v4.1 的核心新增功能。
+
+        搜索策略:
+          1. 截图 + 裁剪搜索区域
+          2. OCR 识别全图文字 → 匹配目标州府名称
+          3. 精确匹配优先，再试模糊匹配（含别名）
+          4. 未找到 → 滑动地图 → 重新搜索
+          5. 超过 max_swipes 次仍未找到 → 返回 False
+
+        匹配规则:
+          - 精确匹配: 识别文本 == 目标名称（如 "苏州府" == "苏州府"）
+          - 模糊匹配: 目标名称是识别文本的子串（如 "苏州" in "苏州府"）
+          - 别名匹配: pref_info.aliases 中的名称（如 ["姑苏"] 匹配 "姑苏"）
+
+        参数:
+          target: str，目标州府名称。
+          pref_info: dict，州府的配置信息。
+
+        返回:
+          bool: 找到并点击为 True。
+        """
+        ocr_cfg = self.pref_cfg.get("ocr_search", {})
+        max_swipes = ocr_cfg.get("max_swipes", 5)
+        swipe_distance = ocr_cfg.get("swipe_distance", 250)
+        swipe_interval = ocr_cfg.get("swipe_interval", 0.8)
+        min_conf = ocr_cfg.get("min_conf", 0.4)
+        fuzzy = ocr_cfg.get("fuzzy_match", True)
+
+        # 构建搜索目标列表（名称 + 别名）
+        search_targets = [target]
+        aliases = pref_info.get("aliases", [])
+        search_targets.extend(aliases)
+
+        # 如果目标以"府"或"镇"结尾，也添加去掉后缀的简短版本
+        for suffix in ("府", "镇"):
+            if target.endswith(suffix):
+                short = target[:-1]  # "苏州府" → "苏州"
+                if short not in search_targets:
+                    search_targets.append(short)
+                break
+
+        log.info(
+            f"[OCR搜索] 开始搜索 '{target}' "
+            f"(候选: {search_targets}, OCR引擎: {self.ocr.engine_name})"
+        )
+
+        # MSER-only 模式禁用滑动搜索告警
+        if self.ocr.engine_name == "mser_only":
+            log.warning(
+                "[OCR搜索] 当前为 MSER-only 模式，只能检测文字区域位置，无法识别文字。\n"
+                "  请安装 PaddleOCR 后重试: pip install paddlepaddle paddleocr\n"
+                "  或切换到 coordinate/template 模式。"
+            )
+
+        # 获取搜索 ROI
+        roi = self._get_search_roi()
+
+        for swipe_count in range(max_swipes + 1):
+            img = ADB.screenshot()
+            if img is None:
+                log.error("[OCR搜索] 截图失败")
+                time.sleep(0.5)
+                continue
+
+            if swipe_count == 0 and self.ocr.engine_name == "mser_only":
+                # MSER-only 首轮：输出诊断信息
+                regions = self.vision.find_text_regions(
+                    img, roi=roi, color_filter=True
+                )
+                log.info(
+                    f"[OCR搜索] MSER 检测到 {len(regions)} 个文字候选区域。"
+                    f" 建议: 安装 PaddleOCR 实现文字识别。"
+                )
+                if regions:
+                    # 输出前 5 个区域的坐标（帮助人工判断）
+                    sample = regions[:5]
+                    log.info(f"[OCR搜索] 候选区域样本: {sample}")
+                # MSER-only 不继续，直接跳到滑动
+                if swipe_count < max_swipes:
+                    self._swipe_map("up", swipe_distance)
+                    time.sleep(swipe_interval)
+                continue
+
+            # ---- OCR 识别 + 匹配 ----
+            for search_name in search_targets:
+                result = self.ocr.find_prefecture(
+                    img, search_name, roi=roi, fuzzy=fuzzy
+                )
+                if result:
+                    cx, cy = result["center"]
+                    matched_text = result["text"]
+                    conf = result["conf"]
+                    log.info(
+                        f"[OCR搜索] ✅ 找到! 识别='{matched_text}' → 目标='{search_name}' "
+                        f"坐标=({cx},{cy}) 置信度={conf:.2f} 滑动次数={swipe_count}"
+                    )
+                    ADB.tap(cx, cy)
+                    time.sleep(self.cfg["timing"]["popup_wait"])
+                    return True
+
+            # ---- OCR 识别完成但没有匹配 ----
+            # 输出识别到的文字列表（便于诊断）
+            ocr_results = self.ocr.recognize(img, roi=roi, min_conf=0.3)
+            texts = [r["text"] for r in ocr_results if r["text"]]
+            if texts:
+                log.debug(f"[OCR搜索] 本轮识别到: {texts[:15]}")
+
+            # 未找到 → 滑动地图
+            if swipe_count < max_swipes:
+                directions = ["up", "left", "down", "right"]
+                direction = directions[swipe_count % len(directions)]
+                log.info(
+                    f"[OCR搜索] 未找到，滑动 {direction} "
+                    f"({swipe_count + 1}/{max_swipes})"
+                )
+                self._swipe_map(direction, swipe_distance)
+                time.sleep(swipe_interval)
+
+        log.warning(f"[OCR搜索] 超过最大滑动次数 ({max_swipes})，未找到州府 '{target}'")
+        return False
+
+    # ================================================================
+    # Mode 3: 模板匹配 + 滑动搜索
     # ================================================================
     def _try_template_search(self, target, pref_info):
         """
@@ -304,7 +474,6 @@ class PrefectureSwitcher:
                 time.sleep(0.5)
                 continue
 
-            # 可选: 裁剪搜索区域减少干扰
             if roi:
                 rx, ry, rw, rh = roi
                 search_img = img[ry:ry + rh, rx:rx + rw]
@@ -312,7 +481,6 @@ class PrefectureSwitcher:
                 search_img = img
                 rx, ry = 0, 0
 
-            # 遍历所有模板
             for tpl_name in templates:
                 match = self.vision.match_template(search_img, tpl_name)
                 if match:
@@ -321,66 +489,20 @@ class PrefectureSwitcher:
                         gx, gy = mx + rx, my + ry
                         log.info(
                             f"[模板搜索] 找到目标! 模板={tpl_name}, "
-                            f"坐标=({gx},{gy}), 置信度={conf:.2f}, 滑动次数={swipe_count}"
+                            f"坐标=({gx},{gy}), 置信度={conf:.2f}, 滑动={swipe_count}"
                         )
                         ADB.tap(gx, gy)
                         time.sleep(self.cfg["timing"]["popup_wait"])
                         return True
 
-            # 未找到，滑动地图
             if swipe_count < max_swipes:
                 direction = directions[swipe_count % len(directions)]
                 distance = search_cfg.get("swipe_distance", 300)
-                log.info(
-                    f"[模板搜索] 未找到，滑动 {direction} "
-                    f"({swipe_count + 1}/{max_swipes})"
-                )
+                log.info(f"[模板搜索] 未找到，滑动 {direction} ({swipe_count + 1}/{max_swipes})")
                 self._swipe_map(direction, distance)
                 time.sleep(search_cfg.get("swipe_interval", 0.8))
 
         log.warning(f"[模板搜索] 超过最大滑动次数 ({max_swipes})，未找到州府 '{target}'")
-        return False
-
-    # ================================================================
-    # Mode 3: MSER 文字检测 (预留)
-    # ================================================================
-    def _try_mser_search(self, target, pref_info):
-        """
-        使用 MSER 文字区域检测 + OCR 在大地图中搜索目标州府名称。
-
-        当前为占位实现，完整实现需要:
-          1. pytesseract 或 paddleocr 库
-          2. 或使用游戏内置的文字识别 API
-
-        参数:
-          target: str，州府名称。
-          pref_info: dict，州府的配置信息。
-
-        返回:
-          bool: 找到并点击为 True。
-        """
-        log.warning(
-            f"[MSER模式] 文字检测模式暂未完整实现，"
-            f"需要安装 OCR 库 (pip install pytesseract 或 paddleocr)\n"
-            f"  当前请使用 coordinate 或 template 模式。"
-        )
-
-        # ---- 框架代码（预留） ----
-        # img = ADB.screenshot()
-        # if img is None:
-        #     return False
-        #
-        # roi = self._get_search_roi()
-        # regions = self.vision.find_text_regions(img, roi=roi)
-        #
-        # for x, y, w, h in regions:
-        #     crop = img[y:y + h, x:x + w]
-        #     text = ocr(crop)  # 需要 pytesseract / paddleocr
-        #     if target in text:
-        #         ADB.tap(x + w // 2, y + h // 2)
-        #         time.sleep(self.cfg["timing"]["popup_wait"])
-        #         return True
-
         return False
 
     # ----------------------------------------------------------------
@@ -421,7 +543,6 @@ class PrefectureSwitcher:
         返回:
           bool: 确认成功（或无需确认）为 True。
         """
-        # 获取该州府的确认按钮坐标（优先用专属配置，回退到默认）
         pref_info = self.pref_cfg.get("prefectures", {}).get(target, {})
         confirm_btn = pref_info.get("confirm_btn")
         if confirm_btn is None:
@@ -464,7 +585,7 @@ class PrefectureSwitcher:
             time.sleep(self.cfg["timing"]["popup_wait"])
 
         log.warning("[确认弹窗] 多次尝试后仍未检测到确认弹窗")
-        return True  # 宽松策略：可能已经进入
+        return True
 
     # ----------------------------------------------------------------
     # Step 4: 等待加载
@@ -476,48 +597,15 @@ class PrefectureSwitcher:
         策略:
           1. 延时 loading_wait 秒（基础等待）
           2. 轮询检测城镇界面特征（预留）
-          3. 最长等待 15 秒后超时退出
-
-        城镇加载特征（预留检测逻辑）:
-          - 屏幕底部出现建筑/功能按钮
-          - 顶部出现城镇名称
-          - 出现"返回大地图"按钮
         """
         loading_wait = self.pref_cfg.get("loading_wait", 3.0)
         log.info(f"[加载] 等待城镇界面加载 ({loading_wait}s)...")
         time.sleep(loading_wait)
-
-        # 轮询检测城镇特征（预留，需要模板截图）
-        # max_wait = 15.0
-        # start_time = time.time()
-        # while time.time() - start_time < max_wait:
-        #     img = ADB.screenshot()
-        #     if img is not None and self._is_town_loaded(img):
-        #         log.info("[加载] 城镇界面已加载")
-        #         return True
-        #     time.sleep(1.5)
-
         log.info("[加载] 加载等待完成")
 
     def _is_town_loaded(self, img):
-        """
-        检测城镇界面是否已加载完成（预留）。
-
-        检测策略:
-          - 模板匹配 town_ui_bottom.png（底部导航栏）
-          - 模板匹配 back_to_map_btn.png（返回大地图按钮）
-          - 屏幕亮度变化检测
-
-        参数:
-          img: BGR 格式 numpy 数组。
-
-        返回:
-          bool: True 表示城镇已加载。
-        """
-        # 预留：检测底部 UI 或返回按钮
-        # match = self.vision.match_template(img, "town_bottom_nav.png")
-        # return match is not None
-        return True  # 当前仅依赖延时
+        """检测城镇界面是否已加载完成（预留）。"""
+        return True
 
     # ----------------------------------------------------------------
     # 大地图辅助: 滑动操作
@@ -543,7 +631,7 @@ class PrefectureSwitcher:
         elif direction == "right":
             ADB.swipe(cx - distance // 2, cy, cx + distance // 2, cy)
         else:
-            log.warning(f"[滑动] 未知方向: {direction}，视为向上")
+            log.warning(f"[滑动] 未知方向: {direction}")
             ADB.swipe(cx, cy + distance // 2, cx, cy - distance // 2)
 
     # ----------------------------------------------------------------
@@ -551,13 +639,11 @@ class PrefectureSwitcher:
     # ----------------------------------------------------------------
     def diagnose(self, save_path=None):
         """
-        诊断模式：截图并保存，帮助用户获取州府坐标。
+        诊断模式：截图并保存，同时输出 MSER 文字区域检测结果。
 
         用法:
           sw = PrefectureSwitcher()
-          sw.diagnose()  # 截图保存到 screenshots/ 目录
-          # 用户用图片查看器打开截图，获取目标坐标
-          # 然后填入 config.json → prefecture.prefectures.<name>.map_coord
+          sw.diagnose()  # 截图 + 文字区域检测 + OCR 识别（如果有 OCR 引擎）
 
         参数:
           save_path: str | None，保存路径。None 时自动生成。
@@ -566,15 +652,38 @@ class PrefectureSwitcher:
             save_path = str(SCREENSHOT_DIR / "big_map_diagnose.png")
 
         img = ADB.screenshot(save_path=save_path)
-        if img is not None:
-            h, w = img.shape[:2]
-            log.info(
-                f"[诊断] 截图已保存: {save_path} (分辨率: {w}x{h})\n"
-                f"  请用图片查看器打开该截图，找到目标州府位置，\n"
-                f"  记录其坐标(x,y)并填入 config.json。"
-            )
-        else:
+        if img is None:
             log.error("[诊断] 截图失败，请检查 ADB 连接")
+            return save_path
+
+        h, w = img.shape[:2]
+        log.info(f"[诊断] 截图已保存: {save_path} (分辨率: {w}x{h})")
+
+        # MSER 文字区域检测
+        roi = self._get_search_roi()
+        regions = self.vision.find_text_regions(img, roi=roi, color_filter=True)
+        log.info(f"[诊断] MSER 检测到 {len(regions)} 个文字候选区域:")
+        for i, (x, y, rw, rh) in enumerate(regions[:15]):
+            log.info(f"  [{i}] ({x}, {y}) {rw}x{rh}")
+
+        # OCR 识别（如果有可用引擎）
+        if self.ocr.engine_name != "mser_only":
+            log.info(f"[诊断] 使用 {self.ocr.engine_name} 进行 OCR 识别...")
+            results = self.ocr.recognize(img, roi=roi, min_conf=0.3)
+            texts = [(r["text"], r["conf"], r["center"]) for r in results if r["text"]]
+            log.info(f"[诊断] OCR 识别到 {len(texts)} 条文字:")
+            for text, conf, center in texts[:20]:
+                log.info(f"  '{text}' 置信度={conf:.2f} 坐标={center}")
+        else:
+            log.info(
+                "[诊断] 无 OCR 引擎，仅输出文字区域坐标。\n"
+                "  安装 PaddleOCR 后可自动识别文字: pip install paddlepaddle paddleocr"
+            )
+
+        log.info(
+            f"\n[诊断] 请参照上述坐标，在 config.json 中配置州府信息:\n"
+            f"  prefecture.prefectures.<州府名>.map_coord = {{\"x\": X, \"y\": Y}}"
+        )
 
         return save_path
 
@@ -597,6 +706,6 @@ def run_prefecture_switch(target=None):
 
 
 def run_diagnose():
-    """执行诊断模式（截图保存）。"""
+    """执行诊断模式（截图 + OCR 分析）。"""
     sw = PrefectureSwitcher()
     sw.diagnose()

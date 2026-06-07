@@ -6,7 +6,7 @@
 
 基于计算机视觉（OpenCV）的《江南百景图》白雪镇寒雪冰洞自动钓鱼脚本。通过 ADB 控制雷电模拟器，实时分析屏幕画面，自动识别收杆圆盘上的光珠位置，在最佳时机点击「拉一下」按钮，实现全自动钓鱼循环。
 
-> 当前版本：**v4.0** — 模块化重构 + 新功能骨架（州府切换 / 行囊城镇切换）
+> 当前版本：**v4.1** — OCR 文字识别完整实现（大地图州府切换）
 
 ---
 
@@ -34,7 +34,8 @@
 | 🔄 **再来一次** | 自动点击「收杆/领取」→「再来一次」，实现无限循环 |
 | ⚠️ **失误保护** | 连续多次未检测到光珠自动进入结果处理，失败后自动重试 |
 | ⏱️ **超时保护** | 60 秒无响应自动退出 + Windows 弹窗通知 + alert.txt 记录 |
-| 🗺️ **州府切换** | 大地图州府切换：坐标/模板/MSER 三种定位模式 + 坐标诊断工具 |
+| 🗺️ **州府切换** | 大地图州府切换：**OCR文字识别** / 坐标直点 / 模板匹配 三种模式，自动降级 |
+| 🆕 **OCR 引擎** | v4.1 新增：PaddleOCR / EasyOCR / MSER 三引擎自动检测，无需手动配置 |
 | 📦 **模块化** | v4.0 重构：公共模块 + 功能模块分离，`launcher.py` 统一入口 |
 
 ---
@@ -51,8 +52,20 @@
 
 ### Python 依赖
 
+**基础依赖（必需）：**
 ```bash
 pip install opencv-python numpy
+```
+
+**OCR 依赖（推荐，用于大地图州府文字识别）：**
+```bash
+# 推荐：PaddleOCR（中文精度最高）
+pip install paddlepaddle paddleocr
+
+# 备选：EasyOCR
+pip install easyocr
+
+# 若不安装 OCR 库，将降级为 MSER 纯区域检测（仅定位不识别文字）
 ```
 
 或使用项目根目录的 `requirements.txt`：
@@ -98,9 +111,9 @@ python launcher.py fish --retry
 |------|------|
 | `python launcher.py fish` | 正常模式：从钓鱼界面开始，自动循环 |
 | `python launcher.py fish --retry` | 续钓模式：从结果页「再来一次」按钮开始 |
-| `python launcher.py switch-prefecture` | 切换州府（坐标/模板/MSER 三模式） |
-| `python launcher.py switch-prefecture --target 应天府` | 指定目标州府名称 |
-| `python launcher.py diagnose-map` | 州府坐标诊断：截图保存，获取坐标后填入 config |
+| `python launcher.py switch-prefecture` | 切换州府（**OCR 文字识别优先**，自动降级坐标/模板） |
+| `python launcher.py switch-prefecture --target 苏州府` | 指定目标州府名称 |
+| `python launcher.py diagnose-map` | **截图+OCR 诊断**：输出检测到的文字区域和识别结果 |
 | `python launcher.py switch-town` | 切换行囊城镇（骨架代码，待截图确认后实现） |
 | `python launcher.py switch-town --target 应天府` | 指定目标城镇名称 |
 | `python launcher.py test` | 测试模式：检查 ADB 连接、截图、光珠检测 |
@@ -216,15 +229,16 @@ JianNanBJT/
 │   ├── paths.py           # 路径常量（SCRIPT_DIR / TEMPLATE_DIR / SCREENSHOT_DIR 等）
 │   ├── adb.py             # ADB 封装（设备检测/连接/截图/点击/滑动）
 │   ├── vision.py          # 视觉识别（光珠检测/区域判定/模板匹配/红色按钮检测）
+│   ├── ocr.py             # ★ OCR 文字识别（v4.1 新增，PaddleOCR/EasyOCR/MSER）
 │   └── config.py          # 配置加载/保存 + DEFAULT_CONFIG 定义
 │
 ├── fishing/               # ★ 钓鱼模块（v4.0 从 main.py 提取）
 │   ├── __init__.py
 │   └── bot.py             # FishingBot 状态机（IDLE → FISHING → ROUND_OVER → STOP）
 │
-├── map_switch/            # ★ 大地图州府切换（v4.0 完整实现）
+├── map_switch/            # ★ 大地图州府切换（v4.1 OCR 完整实现）
 │   ├── __init__.py
-│   └── prefecture.py     # PrefectureSwitcher 类（坐标/模板/MSER 三模式）
+│   └── prefecture.py     # PrefectureSwitcher（OCR/坐标/模板 三模式降级）
 │
 ├── travel_bag/            # ★ 行囊城镇切换（v4.0 新增，骨架代码）
 │   ├── __init__.py
@@ -279,24 +293,46 @@ python launcher.py --help  # 应显示 v4.0
 ### Q: 脚本 60 秒后自动退出？
 这是超时保护机制，防止无限等待。检查项目目录下的 `alert.txt` 了解退出原因。可在 `config.json` 中调整 `timing.activity_timeout`（秒）。
 
-### Q: v4.0 的州府切换功能怎么用？
-州府切换已完整实现，支持三种定位模式。首次使用需要先用 `diagnose-map` 获取坐标：
+### Q: v4.1 的州府切换功能怎么用？
 
+州府切换已完整实现 **OCR 文字识别**，无需预先配置坐标即可使用。
+
+**自动模式（推荐）：**
 ```bash
-# 1. 进入游戏大地图界面
-# 2. 运行诊断模式截取大地图
-python launcher.py diagnose-map
-# 3. 打开 screenshots/big_map_diagnose.png
-# 4. 用图片查看器获取目标州府的像素坐标
-# 5. 填入 config.json → prefecture.prefectures.<name>.map_coord
-# 6. 设置 prefecture.mode 为 "coordinate"
-# 7. 运行切换
-python launcher.py switch-prefecture --target 白雪镇
+# 1. 安装 PaddleOCR（中文精度最高）
+pip install paddlepaddle paddleocr
+
+# 2. 进入游戏大地图界面
+# 3. 直接运行（自动识别州府名称文字并定位）
+python launcher.py switch-prefecture --target 苏州府
 ```
+
+**坐标模式（备选）：**
+```bash
+# 1. 先用诊断模式截取大地图
+python launcher.py diagnose-map
+# 2. 查看日志中输出的文字区域坐标
+# 3. 将坐标填入 config.json
+# 4. 设置 mode_order 为 ["coordinate", "ocr", "template"]
+```
+
+**模式配置：**
+在 `config.json` → `prefecture` 中：
+- `mode`: 首选模式（`"ocr"` / `"coordinate"` / `"template"`）
+- `mode_order`: 模式降级顺序，如 `["ocr", "coordinate", "template"]`
 
 ---
 
 ## 更新日志
+
+### v4.1（2026-06-07）
+- ★ **OCR 文字识别完整实现**：大地图州府切换支持真正的文字识别
+- ★ 新增 `common/ocr.py`：PaddleOCR / EasyOCR / MSER 三引擎自动检测切换
+- ★ 多模式自动降级：OCR → 坐标 → 模板，按 `mode_order` 顺序尝试
+- ★ 增强 `vision.py` 文字区域检测：双相 MSER + 颜色过滤 + 宽高比筛选
+- ★ `diagnose-map` 增强：同时输出 MSER 区域 + OCR 识别结果
+- ★ `config.json` 补全所有已知州府（应天府~绍兴府+白雪镇）及其别名
+- ★ 新增 `mode_order` 配置，支持多模式降级链
 
 ### v4.0（2026-06-07）
 - ★ 模块化重构：拆分为 `common/`、`fishing/`、`map_switch/`、`travel_bag/` 四个模块包

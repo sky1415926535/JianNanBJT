@@ -374,11 +374,17 @@ class Vision:
         return buttons
 
     # ================================================================
-    # ★ v4.0 新增：文字区域检测（用于匹配城镇/州府名称）
+    # ★ v4.1 增强：文字区域检测（游戏 UI 优化版）
     # ================================================================
-    def find_text_regions(self, img, roi=None):
+    def find_text_regions(self, img, roi=None, color_filter=True):
         """
-        在截图 img 中检测文字区域（MSER 算法）。
+        在截图 img 中检测文字区域（MSER + 颜色/形状过滤）。
+
+        算法增强（v4.1）：
+          1. 双相 MSER 检测（正相 + 反相），覆盖浅/深色文字
+          2. 颜色过滤：只保留亮色文字区域（游戏 UI 中文字多为白/黄色）
+          3. 宽高比过滤：针对中文 2-4 字名横向排列优化
+          4. 重叠区域合并（NMS 简化版）
 
         MSER（最大稳定极值区域）是一种传统的文字检测算法，
         对字体、大小、颜色变化具有一定鲁棒性。
@@ -386,30 +392,125 @@ class Vision:
 
         参数：
           img: BGR 格式 numpy 数组
-          roi: tuple，可选，(x, y, w, h) 限定检测区域，
-              用于减少计算量、提高准确率。
-              若提供 roi，内部会先裁剪 img 再检测，
-              返回的 bbox 坐标会自动偏移回原图坐标系。
+          roi: tuple，可选，(x, y, w, h) 限定检测区域。
+              若提供，内部裁剪后检测，返回坐标自动偏移回原图。
+          color_filter: bool，是否启用颜色过滤（游戏 UI 亮色文字）。
 
         返回：
           list: [(x, y, w, h), ...]
-            每个 bbox 为（左上X, 左上Y, 宽度, 高度）
+            每个 bbox 为（左上X, 左上Y, 宽度, 高度），按从上到下排列
         """
+        offset_x, offset_y = 0, 0
         if roi is not None:
             rx, ry, rw, rh = roi
             img = img[ry:ry + rh, rx:rx + rw]
+            offset_x, offset_y = rx, ry
 
-        # MSER 文字区域检测
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        mser = cv2.MSER_create()
-        regions, _ = mser.detectRegions(gray)
+        h, w = gray.shape[:2]
+
+        # MSER 检测器（参数针对游戏文字调优）
+        mser = cv2.MSER_create(
+            _delta=3,             # 变化阈值（越小检测越多）
+            _min_area=40,         # 最小区域（过滤噪声点，比默认 60 小）
+            _max_area=4000,       # 最大区域（过滤大块背景）
+            _max_variation=0.25,  # 最大变化率
+        )
+
+        # 双相检测：正相（亮文字暗背景）+ 反相（暗文字亮背景）
+        regions_pos, _ = mser.detectRegions(gray)
+        regions_neg, _ = mser.detectRegions(255 - gray)
+        all_regions = list(regions_pos) + list(regions_neg)
 
         boxes = []
-        for region in regions:
-            x, y, w, h = cv2.boundingRect(region.reshape(-1, 2))
-            if w > 20 and h > 10 and w < 400 and h < 80:
-                if roi is not None:
-                    x += rx
-                    y += ry
-                boxes.append((x, y, w, h))
+        for region in all_regions:
+            pts = region.reshape(-1, 2)
+            x, y, rw_box, rh_box = cv2.boundingRect(pts)
+
+            # 尺寸过滤
+            if rw_box < 15 or rh_box < 10:
+                continue
+            if rw_box > 500 or rh_box > 100:
+                continue
+
+            # 面积过滤
+            area = rw_box * rh_box
+            if area < 60 or area > 15000:
+                continue
+
+            # 宽高比过滤（针对中文游戏名称）
+            # 2字横排 ≈ 2:1 ~ 4:1
+            # 3字横排 ≈ 3:1 ~ 6:1
+            # 4字横排 ≈ 4:1 ~ 7:1
+            aspect = rw_box / max(rh_box, 1)
+            if aspect < 1.2 or aspect > 8.0:
+                continue
+
+            # 颜色过滤（可选）：游戏 UI 中文字通常为亮色
+            if color_filter:
+                y1, y2 = max(0, y - 2), min(h, y + rh_box + 2)
+                x1, x2 = max(0, x - 2), min(w, x + rw_box + 2)
+                roi_patch = img[y1:y2, x1:x2]
+                if roi_patch.size > 0:
+                    # 采样区域中最亮的像素灰度
+                    gray_patch = cv2.cvtColor(roi_patch, cv2.COLOR_BGR2GRAY)
+                    bright_pixels = gray_patch[gray_patch > 150]
+                    if len(bright_pixels) < area * 0.15:
+                        continue  # 亮像素不足 15%，不是文字
+
+            boxes.append((x + offset_x, y + offset_y, rw_box, rh_box))
+
+        # 合并重叠区域
+        boxes = self._merge_bboxes(boxes)
+
+        # 按位置排序（从上到下，从左到右）
+        boxes.sort(key=lambda b: (b[1] // 30, b[0]))
+
         return boxes
+
+    def _merge_bboxes(self, bboxes, iou_threshold=0.25):
+        """
+        合并重叠的边界框（简化 NMS）。
+
+        参数：
+          bboxes: [(x, y, w, h), ...]
+          iou_threshold: float，IoU 阈值
+
+        返回：
+          list: 合并后的 bbox 列表
+        """
+        if len(bboxes) <= 1:
+            return bboxes
+
+        bboxes = sorted(bboxes, key=lambda b: b[0])
+        merged = []
+        used = [False] * len(bboxes)
+
+        for i, b1 in enumerate(bboxes):
+            if used[i]:
+                continue
+            x1, y1, w1, h1 = b1
+            x1e, y1e = x1 + w1, y1 + h1
+
+            for j, b2 in enumerate(bboxes):
+                if i == j or used[j]:
+                    continue
+                x2, y2, w2, h2 = b2
+                x2e, y2e = x2 + w2, y2 + h2
+
+                # 计算交集
+                ix = max(0, min(x1e, x2e) - max(x1, x2))
+                iy = max(0, min(y1e, y2e) - max(y1, y2))
+                inter = ix * iy
+                union = w1 * h1 + w2 * h2 - inter
+
+                if union > 0 and inter / union > iou_threshold:
+                    x1, y1 = min(x1, x2), min(y1, y2)
+                    x1e, y1e = max(x1e, x2e), max(y1e, y2e)
+                    w1, h1 = x1e - x1, y1e - y1
+                    used[j] = True
+
+            merged.append((x1, y1, w1, h1))
+            used[i] = True
+
+        return merged
