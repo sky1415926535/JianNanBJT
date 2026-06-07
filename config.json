@@ -56,5 +56,35 @@
     "retry_on_failure": true,
     "max_retries": 0,
     "retry_delay": 2.0
+  },
+  "prefecture": {
+    "target": "白雪镇",
+    "mode": "coordinate",
+    "big_map_enter_btn": {"x": 120, "y": 980, "comment": "大地图入口按钮坐标"},
+    "big_map_indicator": {"x": 960, "y": 30, "comment": "大地图界面特征检测点(如顶部导航栏)"},
+    "default_confirm_btn": {"x": 960, "y": 600, "comment": "通用确认进入按钮"},
+    "loading_wait": 3.0,
+    "map_search": {
+      "max_swipes": 8,
+      "swipe_distance": 300,
+      "swipe_interval": 0.8,
+      "directions": ["up", "down", "left", "right"],
+      "match_threshold": 0.75,
+      "search_area": {"x": 200, "y": 100, "w": 1520, "h": 800, "comment": "裁剪搜索区域减少干扰"}
+    },
+    "prefectures": {
+      "白雪镇": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图上该州府的坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": ["baixue_pref.png"],
+        "comment": "白雪镇州府配置"
+      },
+      "应天府": {
+        "map_coord": {"x": 0, "y": 0, "comment": "大地图上该州府的坐标【待配置】"},
+        "confirm_btn": null,
+        "search_templates": ["yingtian_pref.png"],
+        "comment": "应天府州府配置(示例)"
+      }
+    }
   }
 }

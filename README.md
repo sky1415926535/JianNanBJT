@@ -34,7 +34,7 @@
 | 🔄 **再来一次** | 自动点击「收杆/领取」→「再来一次」，实现无限循环 |
 | ⚠️ **失误保护** | 连续多次未检测到光珠自动进入结果处理，失败后自动重试 |
 | ⏱️ **超时保护** | 60 秒无响应自动退出 + Windows 弹窗通知 + alert.txt 记录 |
-| 🎛️ **多模式** | `fish` 钓鱼 / `switch-prefecture` 切换州府 / `switch-town` 切换城镇 / `test` 测试 / `calibrate` 校准 |
+| 🗺️ **州府切换** | 大地图州府切换：坐标/模板/MSER 三种定位模式 + 坐标诊断工具 |
 | 📦 **模块化** | v4.0 重构：公共模块 + 功能模块分离，`launcher.py` 统一入口 |
 
 ---
@@ -98,8 +98,9 @@ python launcher.py fish --retry
 |------|------|
 | `python launcher.py fish` | 正常模式：从钓鱼界面开始，自动循环 |
 | `python launcher.py fish --retry` | 续钓模式：从结果页「再来一次」按钮开始 |
-| `python launcher.py switch-prefecture` | 切换州府（骨架代码，待截图确认后实现） |
+| `python launcher.py switch-prefecture` | 切换州府（坐标/模板/MSER 三模式） |
 | `python launcher.py switch-prefecture --target 应天府` | 指定目标州府名称 |
+| `python launcher.py diagnose-map` | 州府坐标诊断：截图保存，获取坐标后填入 config |
 | `python launcher.py switch-town` | 切换行囊城镇（骨架代码，待截图确认后实现） |
 | `python launcher.py switch-town --target 应天府` | 指定目标城镇名称 |
 | `python launcher.py test` | 测试模式：检查 ADB 连接、截图、光珠检测 |
@@ -183,7 +184,18 @@ python launcher.py fish --retry
 | `retry.retry_on_failure` | `true` | 失败后是否自动重试 |
 | `retry.max_retries` | `0` | 最大重试次数（0=无限重试） |
 | `retry.retry_delay` | `2.0` | 重试前等待时间（秒） |
-| `prefecture.target` | `白雪镇` | 默认目标州府名称（switch-prefecture 模式） |
+| `prefecture.target` | `白雪镇` | 默认目标州府名称 |
+| `prefecture.mode` | `coordinate` | 定位模式：`coordinate`(坐标直点) / `template`(模板匹配) / `mser`(文字检测) |
+| `prefecture.big_map_enter_btn` | `{x:120, y:980}` | 大地图入口按钮坐标 |
+| `prefecture.default_confirm_btn` | `{x:960, y:600}` | 通用确认进入按钮坐标 |
+
+每个州府的独立配置在 `prefecture.prefectures.<name>` 下：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `map_coord` | `{x:0, y:0}` | 大地图上该州府的像素坐标（0=未配置，需用 `diagnose-map` 获取） |
+| `confirm_btn` | `null` | 该州府专属确认按钮坐标（null 则回退到 `default_confirm_btn`） |
+| `search_templates` | `[]` | 模板匹配用图片文件名（位于 `templates/` 目录） |
 | `travel_bag.target` | `白雪镇` | 默认目标城镇名称（switch-town 模式） |
 
 ---
@@ -210,9 +222,9 @@ JianNanBJT/
 │   ├── __init__.py
 │   └── bot.py             # FishingBot 状态机（IDLE → FISHING → ROUND_OVER → STOP）
 │
-├── map_switch/            # ★ 大地图州府切换（v4.0 新增，骨架代码）
+├── map_switch/            # ★ 大地图州府切换（v4.0 完整实现）
 │   ├── __init__.py
-│   └── prefecture.py     # PrefectureSwitcher 类（待截图确认 UI 后实现）
+│   └── prefecture.py     # PrefectureSwitcher 类（坐标/模板/MSER 三模式）
 │
 ├── travel_bag/            # ★ 行囊城镇切换（v4.0 新增，骨架代码）
 │   ├── __init__.py
@@ -267,8 +279,20 @@ python launcher.py --help  # 应显示 v4.0
 ### Q: 脚本 60 秒后自动退出？
 这是超时保护机制，防止无限等待。检查项目目录下的 `alert.txt` 了解退出原因。可在 `config.json` 中调整 `timing.activity_timeout`（秒）。
 
-### Q: v4.0 的州府切换/城镇切换功能可用吗？
-当前 v4.0 中这两个功能为**骨架代码**，需要用户提供大地图界面截图和行囊界面截图后才能实现具体检测逻辑。欢迎提供截图以完善功能。
+### Q: v4.0 的州府切换功能怎么用？
+州府切换已完整实现，支持三种定位模式。首次使用需要先用 `diagnose-map` 获取坐标：
+
+```bash
+# 1. 进入游戏大地图界面
+# 2. 运行诊断模式截取大地图
+python launcher.py diagnose-map
+# 3. 打开 screenshots/big_map_diagnose.png
+# 4. 用图片查看器获取目标州府的像素坐标
+# 5. 填入 config.json → prefecture.prefectures.<name>.map_coord
+# 6. 设置 prefecture.mode 为 "coordinate"
+# 7. 运行切换
+python launcher.py switch-prefecture --target 白雪镇
+```
 
 ---
 
@@ -278,11 +302,12 @@ python launcher.py --help  # 应显示 v4.0
 - ★ 模块化重构：拆分为 `common/`、`fishing/`、`map_switch/`、`travel_bag/` 四个模块包
 - ★ 新增 `launcher.py` 统一入口，支持 `argparse` 子命令分发
 - ★ 新增 `common/` 公共模块：`adb.py`（ADB 封装）、`vision.py`（视觉识别）、`config.py`（配置管理）、`paths.py`（路径常量）
-- ★ 新增大地图州府切换骨架（`map_switch/prefecture.py`）
+- ★ **大地图州府切换完整实现**（`map_switch/prefecture.py`）：坐标/模板/MSER 三种定位模式 + 诊断工具 + 确认弹窗处理
 - ★ 新增行囊城镇切换骨架（`travel_bag/town_switch.py`）
-- ★ `vision.py` 新增 `find_red_buttons()`（红色按钮检测）和 `find_text_regions()`（文字区域检测）
-- 修复 `calibrate` 模式：跳过可选坐标输入时不再报错
-- 更新 README.md：补全所有配置参数说明、修正默认值、新增项目结构说明
+- ★ `vision.py` 新增 `find_red_buttons()`（HSV 红色按钮检测）和 `find_text_regions()`（MSER 文字区域检测）
+- ★ 新增 `diagnose-map` 子命令（州府坐标诊断工具）
+- 补全所有模块的详细代码注释（光珠 5 层过滤算法、FSM 状态转换、ADB 连接逻辑等）
+- 更新 README.md：修正配置默认值、新增光珠检测原理章节、模块依赖关系图
 
 ### v3.2（2026-06-04）
 - 新增 `retry` 子命令：从结果页「再来一次」按钮开始执行

@@ -6,30 +6,32 @@
  环境：雷电模拟器9 + ADB + Python + OpenCV
  运行平台：Windows
 
-【v4.0 更新说明】（模块化重构 + 新功能骨架）
+【v4.0 更新说明】（模块化重构 + 状态府切换完整实现）
   1. ★ 模块化架构：公共模块(common) + 功能模块(fishing/map_switch/travel_bag)
   2. ★ 统一入口 launcher.py：通过子命令切换不同功能
-  3. ★ 大地图州府切换骨架（map_switch/prefecture.py）
-  4. ★ 行囊城镇切换骨架（travel_bag/town_switch.py）
+  3. ★ 大地图州府切换（map_switch/prefecture.py — 完整实现）
+  4.  行囊城镇切换骨架（travel_bag/town_switch.py — 待截图实现）
   5. ★ Vision 新增: find_red_buttons()、find_text_regions()（v4.0 新增）
 
 【模块依赖】
   - common/adb.py        → ADB 操作封装
   - common/config.py     → 配置加载/保存
   - common/paths.py      → 路径常量
-  - common/vision.py     → 视觉识别
+  - common/vision.py     → 视觉识别（光珠/模板/红色按钮/MSER）
   - fishing/bot.py       → 钓鱼状态机
-  - map_switch/prefecture.py   → 州府切换（骨架）
+  - map_switch/prefecture.py   → 州府切换（坐标/模板/MSER 三模式）
   - travel_bag/town_switch.py → 城镇切换（骨架）
 
 【使用方法】
-  python launcher.py fish              # 启动钓鱼脚本
-  python launcher.py fish --retry      # 从"再来一次"开始钓鱼
-  python launcher.py switch-prefecture # 切换州府（骨架）
-  python launcher.py switch-town       # 切换城镇（骨架）
-  python launcher.py test              # 测试各模块
-  python launcher.py calibrate         # 交互式坐标校准
-  python launcher.py menu              # 交互式菜单（默认）
+  python launcher.py fish                 # 启动钓鱼脚本
+  python launcher.py fish --retry         # 从"再来一次"开始钓鱼
+  python launcher.py switch-prefecture    # 切换州府
+  python launcher.py switch-prefecture --target 白雪镇  # 指定目标
+  python launcher.py diagnose-map         # 州府坐标诊断
+  python launcher.py switch-town          # 切换城镇（骨架）
+  python launcher.py test                 # 测试各模块
+  python launcher.py calibrate            # 交互式坐标校准
+  python launcher.py menu                 # 交互式菜单（默认）
 ============================================================================
 """
 import os
@@ -115,15 +117,19 @@ def run_fishing(retry_mode=False):
 
 def switch_prefecture(target=None):
     """
-    切换州府（v4.0 骨架功能）。
+    切换州府（v4.0 完整实现）。
 
-    当前状态：骨架代码，等待用户提供大地图截图后实现具体逻辑。
+    支持三种定位模式（按配置 mode 字段选择）:
+      - coordinate: 坐标直点（最快，需预配置 map_coord）
+      - template:   模板匹配 + 滑动搜索（需州府截图模板）
+      - mser:       MSER 文字检测（需 OCR 库，预留）
 
-    执行流程（未来）：
+    执行流程：
       1. 连接 ADB
-      2. 打开大地图（模拟器点击）
-      3. 滑动地图定位目标州府
-      4. 点击进入目标州府
+      2. 进入大地图（点击大地图按钮）
+      3. 截图 → 定位目标州府 → 点击
+      4. 处理确认弹窗
+      5. 等待城镇加载完成
 
     参数：
       target: str | None，目标州府名称
@@ -184,6 +190,38 @@ def switch_town(target=None):
 
     switcher = TownSwitcher(cfg)
     switcher.switch_to(target)
+
+
+def run_diagnose_map():
+    """
+    州府坐标诊断模式。
+
+    截取当前屏幕并保存到 screenshots/ 目录，
+    用户用图片查看器打开截图后获取州府坐标，
+    填入 config.json → prefecture.prefectures.<name>.map_coord。
+
+    执行流程：
+      1. 连接 ADB
+      2. 截图保存为 screenshots/big_map_diagnose.png
+      3. 输出日志引导用户获取坐标
+
+    返回：
+      None
+    """
+    from common import ADB, detect_device, load_config
+    from map_switch import run_diagnose
+
+    cfg = load_config()
+    device = detect_device()
+    if not device:
+        log.error("未检测到 ADB 设备！")
+        return
+    cfg["adb"]["device"] = device
+    if not ADB.connect(device):
+        log.error("ADB 连接失败！")
+        return
+
+    run_diagnose()
 
 
 def run_test():
@@ -352,10 +390,11 @@ def run_menu():
     菜单选项：
       [1] 启动钓鱼
       [2] 从「再来一次」开始钓鱼
-      [3] 切换州府（骨架）
+      [3] 切换州府
       [4] 切换行囊城镇（骨架）
-      [5] 测试模式
-      [6] 坐标校准
+      [5] 州府坐标诊断
+      [6] 测试模式
+      [7] 坐标校准
       [0] 退出
 
     注意：
@@ -367,10 +406,11 @@ def run_menu():
     print("=" * 50)
     print("  [1] 启动钓鱼")
     print("  [2] 从「再来一次」开始钓鱼")
-    print("  [3] 切换州府（骨架）")
+    print("  [3] 切换州府")
     print("  [4] 切换行囊城镇（骨架）")
-    print("  [5] 测试模式")
-    print("  [6] 坐标校准")
+    print("  [5] 州府坐标诊断")
+    print("  [6] 测试模式")
+    print("  [7] 坐标校准")
     print("  [0] 退出")
     print("-" * 50)
     choice = input(" 请选择 [1]: ").strip()
@@ -381,8 +421,9 @@ def run_menu():
         "2": lambda: run_fishing(retry_mode=True),
         "3": switch_prefecture,
         "4": switch_town,
-        "5": run_test,
-        "6": run_calibrate,
+        "5": run_diagnose_map,
+        "6": run_test,
+        "7": run_calibrate,
     }
     if choice in actions:
         actions[choice]()
@@ -413,22 +454,24 @@ def main():
         description="江南百景图 自动化脚本 v4.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""示例:
-  python launcher.py fish              # 启动钓鱼
-  python launcher.py fish --retry      # 从再来一次开始钓鱼
-  python launcher.py switch-prefecture # 切换州府
-  python launcher.py switch-town       # 切换城镇
-  python launcher.py test              # 测试模式
-  python launcher.py calibrate         # 坐标校准
-  python launcher.py menu              # 交互菜单
+  python launcher.py fish                 # 启动钓鱼
+  python launcher.py fish --retry         # 从再来一次开始钓鱼
+  python launcher.py switch-prefecture    # 切换州府
+  python launcher.py switch-prefecture --target 白雪镇  # 指定目标
+  python launcher.py diagnose-map         # 州府坐标诊断
+  python launcher.py switch-town          # 切换城镇
+  python launcher.py test                 # 测试模式
+  python launcher.py calibrate            # 坐标校准
+  python launcher.py menu                 # 交互菜单
         """
     )
     parser.add_argument(
         "action",
-        choices=["fish", "switch-prefecture", "switch-town", "test", "calibrate", "menu"],
+        choices=["fish", "switch-prefecture", "switch-town", "diagnose-map", "test", "calibrate", "menu"],
         nargs="?",
         default="menu",
         help="fish=钓鱼, switch-prefecture=切换州府, switch-town=切换城镇, "
-             "test=测试, calibrate=校准, menu=菜单"
+             "diagnose-map=州府坐标诊断, test=测试, calibrate=校准, menu=菜单"
     )
     parser.add_argument(
         "--retry", action="store_true",
@@ -446,6 +489,8 @@ def main():
         switch_prefecture(target=args.target)
     elif args.action == "switch-town":
         switch_town(target=args.target)
+    elif args.action == "diagnose-map":
+        run_diagnose_map()
     elif args.action == "test":
         run_test()
     elif args.action == "calibrate":
