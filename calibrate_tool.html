@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>江南百景图 - 大地图坐标标定工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .main-content {
+            display: flex;
+            height: calc(100vh - 200px);
+        }
+        
+        .left-panel {
+            width: 300px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-right: 2px solid #e9ecef;
+            overflow-y: auto;
+        }
+        
+        .right-panel {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .instruction {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .instruction h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+        
+        .instruction ol {
+            margin-left: 20px;
+        }
+        
+        .instruction li {
+            margin: 8px 0;
+        }
+        
+        .prefecture-list {
+            margin-top: 20px;
+        }
+        
+        .prefecture-list h3 {
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .prefecture-item {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .prefecture-item:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+        
+        .prefecture-item.active {
+            border-color: #667eea;
+            background: #e7f3ff;
+        }
+        
+        .prefecture-item.calibrated {
+            border-color: #4caf50;
+            background: #f1f8f1;
+        }
+        
+        .prefecture-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .prefecture-coord {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .prefecture-coord.calibrated {
+            color: #4caf50;
+            font-weight: bold;
+        }
+        
+        .image-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+        }
+        
+        #mapImage {
+            max-width: 100%;
+            max-height: 100%;
+            cursor: crosshair;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .coord-display {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            pointer-events: none;
+        }
+        
+        .click-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.3); }
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        
+        .btn-success {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #45a049;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .button-group {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .status-bar {
+            background: #f8f9fa;
+            border-top: 2px solid #e9ecef;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .progress {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .progress strong {
+            color: #667eea;
+        }
+        
+        .alert {
+            padding: 12px 20px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .file-upload-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .file-upload-label:hover {
+            background: #5a6268;
+        }
+        
+        #coordInputModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            min-width: 400px;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .modal-buttons {
+            margin-top: 20px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏯 江南百景图 - 大地图坐标标定工具</h1>
+            <p>可视化标定每个府在大地图上的坐标位置</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="instruction">
+                    <h3>📋 使用说明</h3>
+                    <ol>
+                        <li>点击"上传大地图截图"按钮</li>
+                        <li>选择游戏中的大地图截图</li>
+                        <li>在右侧列表选择要标定的府</li>
+                        <li>在图片上点击对应府的位置</li>
+                        <li>确认坐标并保存</li>
+                        <li>重复3-5步直到所有府都标定完成</li>
+                        <li>点击"导出配置"按钮下载config.json</li>
+                    </ol>
+                </div>
+                
+                <div class="prefecture-list">
+                    <h3>📍 府列表</h3>
+                    <div id="prefectureList"></div>
+                </div>
+                
+                <div class="button-group">
+                    <label for="imageUpload" class="file-upload-label btn btn-secondary">
+                        📁 上传大地图截图
+                    </label>
+                    <input type="file" id="imageUpload" accept="image/*">
+                </div>
+            </div>
+            
+            <div class="right-panel">
+                <div class="image-container" id="imageContainer">
+                    <div class="coord-display" id="coordDisplay">X: -, Y: -</div>
+                    <div class="alert alert-info" id="imageHint">
+                        👆 请先上传大地图截图
+                    </div>
+                    <img id="mapImage" style="display:none;">
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn btn-success" onclick="exportConfig()">💾 导出配置</button>
+                    <button class="btn btn-secondary" onclick="clearAll()">🗑️ 清除所有</button>
+                    <button class="btn btn-primary" onclick="loadExampleImage()">🖼️ 加载示例图片</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <div class="progress">
+                进度: <strong id="progressText">0/8</strong> 个府已标定
+            </div>
+            <div>
+                <span class="alert alert-success" style="padding: 5px 15px; font-size: 13px;">
+                    ✅ 已标定: <span id="calibratedList"></span>
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 坐标输入模态框 -->
+    <div id="coordInputModal">
+        <div class="modal-content">
+            <h2>确认坐标</h2>
+            <div class="form-group">
+                <label>府名</label>
+                <input type="text" id="modalPrefectureName" readonly>
+            </div>
+            <div class="form-group">
+                <label>X坐标</label>
+                <input type="number" id="modalCoordX" readonly>
+            </div>
+            <div class="form-group">
+                <label>Y坐标</label>
+                <input type="number" id="modalCoordY" readonly>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-success" onclick="confirmCoord()">确认</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 所有府的数据
+        const prefectures = {
+            '白雪镇': { x: 0, y: 0, calibrated: false },
+            '应天府': { x: 0, y: 0, calibrated: false },
+            '苏州府': { x: 0, y: 0, calibrated: false },
+            '杭州府': { x: 789, y: 352, calibrated: true },
+            '松江府': { x: 0, y: 0, calibrated: false },
+            '徽州府': { x: 0, y: 0, calibrated: false },
+            '扬州府': { x: 0, y: 0, calibrated: false },
+            '绍兴府': { x: 940, y: 687, calibrated: true }
+        };
+        
+        let selectedPrefecture = null;
+        let imageLoaded = false;
+        
+        // 初始化
+        function init() {
+            renderPrefectureList();
+            updateProgress();
+            
+            // 图片上传事件
+            document.getElementById('imageUpload').addEventListener('change', handleImageUpload);
+            
+            // 图片点击事件
+            document.getElementById('mapImage').addEventListener('click', handleImageClick);
+            
+            // 鼠标移动显示坐标
+            document.getElementById('mapImage').addEventListener('mousemove', handleMouseMove);
+        }
+        
+        // 渲染府列表
+        function renderPrefectureList() {
+            const list = document.getElementById('prefectureList');
+            list.innerHTML = '';
+            
+            for (const [name, data] of Object.entries(prefectures)) {
+                const item = document.createElement('div');
+                item.className = 'prefecture-item';
+                if (data.calibrated) item.classList.add('calibrated');
+                if (selectedPrefecture === name) item.classList.add('active');
+                
+                item.innerHTML = `
+                    <div class="prefecture-name">${data.calibrated ? '✅' : '⬜'} ${name}</div>
+                    <div class="prefecture-coord ${data.calibrated ? 'calibrated' : ''}">
+                        ${data.calibrated ? `(${data.x}, ${data.y})` : '未标定'}
+                    </div>
+                `;
+                
+                item.onclick = () => selectPrefecture(name);
+                list.appendChild(item);
+            }
+        }
+        
+        // 选择府
+        function selectPrefecture(name) {
+            selectedPrefecture = name;
+            renderPrefectureList();
+            
+            const hint = document.getElementById('imageHint');
+            if (imageLoaded) {
+                hint.className = 'alert alert-warning';
+                hint.innerHTML = `🎯 请在图片上点击 <strong>${name}</strong> 的位置`;
+            }
+        }
+        
+        // 处理图片上传
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('mapImage');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                
+                document.getElementById('imageHint').style.display = 'none';
+                imageLoaded = true;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 处理鼠标移动
+        function handleMouseMove(event) {
+            if (!imageLoaded) return;
+            
+            const rect = event.target.getBoundingClientRect();
+            const x = Math.round(event.clientX - rect.left);
+            const y = Math.round(event.clientY - rect.top);
+            
+            document.getElementById('coordDisplay').textContent = `X: ${x}, Y: ${y}`;
+        }
+        
+        // 处理图片点击
+        function handleImageClick(event) {
+            if (!selectedPrefecture) {
+                alert('⚠️ 请先在左侧列表选择一个府');
+                return;
+            }
+            
+            const rect = event.target.getBoundingClientRect();
+            const x = Math.round(event.clientX - rect.left);
+            const y = Math.round(event.clientY - rect.top);
+            
+            // 显示确认模态框
+            document.getElementById('modalPrefectureName').value = selectedPrefecture;
+            document.getElementById('modalCoordX').value = x;
+            document.getElementById('modalCoordY').value = y;
+            document.getElementById('coordInputModal').style.display = 'flex';
+        }
+        
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('coordInputModal').style.display = 'none';
+        }
+        
+        // 确认坐标
+        function confirmCoord() {
+            const name = document.getElementById('modalPrefectureName').value;
+            const x = parseInt(document.getElementById('modalCoordX').value);
+            const y = parseInt(document.getElementById('modalCoordY').value);
+            
+            prefectures[name].x = x;
+            prefectures[name].y = y;
+            prefectures[name].calibrated = true;
+            
+            // 添加标记
+            addMarker(name, x, y);
+            
+            closeModal();
+            renderPrefectureList();
+            updateProgress();
+            
+            // 自动选择下一个未标定的府
+            autoSelectNext();
+        }
+        
+        // 添加标记
+        function addMarker(name, x, y) {
+            const container = document.getElementById('imageContainer');
+            const marker = document.createElement('div');
+            marker.className = 'click-marker';
+            marker.style.left = x + 'px';
+            marker.style.top = y + 'px';
+            marker.title = name;
+            container.appendChild(marker);
+        }
+        
+        // 自动选择下一个
+        function autoSelectNext() {
+            for (const [name, data] of Object.entries(prefectures)) {
+                if (!data.calibrated) {
+                    selectPrefecture(name);
+                    return;
+                }
+            }
+            selectedPrefecture = null;
+            const hint = document.getElementById('imageHint');
+            hint.className = 'alert alert-success';
+            hint.innerHTML = '🎉 所有府已标定完成！请点击"导出配置"按钮';
+            hint.style.display = 'block';
+        }
+        
+        // 更新进度
+        function updateProgress() {
+            const total = Object.keys(prefectures).length;
+            let calibrated = 0;
+            let calibratedNames = [];
+            
+            for (const [name, data] of Object.entries(prefectures)) {
+                if (data.calibrated) {
+                    calibrated++;
+                    calibratedNames.push(name);
+                }
+            }
+            
+            document.getElementById('progressText').textContent = `${calibrated}/${total}`;
+            document.getElementById('calibratedList').textContent = 
+                calibratedNames.length > 0 ? calibratedNames.join(', ') : '无';
+        }
+        
+        // 导出配置
+        function exportConfig() {
+            const config = {
+                "prefecture": {
+                    "prefectures": {}
+                }
+            };
+            
+            for (const [name, data] of Object.entries(prefectures)) {
+                config.prefecture.prefectures[name] = {
+                    "map_coord": {
+                        "x": data.x,
+                        "y": data.y,
+                        "comment": data.calibrated ? "大地图坐标【已标定】- 可视化工具标定" : "大地图坐标【待配置】"
+                    },
+                    "confirm_btn": null,
+                    "search_templates": [],
+                    "aliases": [name.substring(0, 2)],
+                    "comment": ""
+                };
+            }
+            
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'map_coords.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            alert('✅ 配置已导出为 map_coords.json\n\n请将其内容合并到 config.json 的 prefecture.prefectures 节点');
+        }
+        
+        // 清除所有
+        function clearAll() {
+            if (!confirm('确定要清除所有已标定的坐标吗？')) return;
+            
+            for (const [name, data] of Object.entries(prefectures)) {
+                data.x = 0;
+                data.y = 0;
+                data.calibrated = false;
+            }
+            
+            // 清除标记
+            const markers = document.querySelectorAll('.click-marker');
+            markers.forEach(m => m.remove());
+            
+            renderPrefectureList();
+            updateProgress();
+        }
+        
+        // 加载示例图片
+        function loadExampleImage() {
+            const img = document.getElementById('mapImage');
+            img.src = 'bigmap_calibrate.png';
+            img.style.display = 'block';
+            document.getElementById('imageHint').style.display = 'none';
+            imageLoaded = true;
+        }
+        
+        // 页面加载完成后初始化
+        window.onload = init;
+    </script>
+</body>
+</html>

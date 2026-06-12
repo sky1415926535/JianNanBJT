@@ -145,11 +145,7 @@ class OCREngine:
             self._impl = PaddleOCR(
                 use_angle_cls=False,   # 游戏文字通常水平，关闭角度分类加速
                 lang="ch",              # 中文
-                use_gpu=False,          # CPU 模式
-                show_log=False,         # 关闭 PaddleOCR 内部日志
-                det_db_thresh=0.2,      # 降低检测阈值（游戏文字可能较小）
-                det_db_box_thresh=0.15,
-                rec_batch_num=1,
+                # PaddleOCR 3.x 已移除: use_gpu, show_log, det_db_thresh 等
             )
             log.info("[PaddleOCR] 初始化成功 (CPU模式, 中文)")
         except Exception as e:
@@ -234,7 +230,7 @@ class OCREngine:
         """PaddleOCR 识别。"""
         results = []
         try:
-            ocr_result = self._impl.ocr(img, cls=False)
+            ocr_result = self._impl.ocr(img)
             if ocr_result and ocr_result[0]:
                 for line in ocr_result[0]:
                     box = line[0]          # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]

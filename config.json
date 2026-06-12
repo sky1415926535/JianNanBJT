@@ -119,7 +119,7 @@
         "map_coord": {
           "x": 0,
           "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "comment": "大地图坐标【待配置】- 请在游戏中打开大地图，找到白雪镇位置后运行 python calibrate_map.py"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -132,7 +132,7 @@
         "map_coord": {
           "x": 0,
           "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "comment": "大地图坐标【待配置】- 请在游戏中打开大地图，找到应天府位置后运行 python calibrate_map.py"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -145,7 +145,7 @@
         "map_coord": {
           "x": 0,
           "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "comment": "大地图坐标【待配置】- 请在游戏中打开大地图，找到苏州府位置后运行 python calibrate_map.py"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -156,9 +156,9 @@
       },
       "杭州府": {
         "map_coord": {
-          "x": 0,
-          "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "x": 789,
+          "y": 352,
+          "comment": "大地图坐标【已标定】- 在大地图上方中部区域"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -171,7 +171,7 @@
         "map_coord": {
           "x": 0,
           "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "comment": "大地图坐标【待配置】- 请在游戏中打开大地图，找到松江府位置后运行 python calibrate_map.py"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -184,7 +184,7 @@
         "map_coord": {
           "x": 0,
           "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "comment": "大地图坐标【待配置】- 请在游戏中打开大地图，找到徽州府位置后运行 python calibrate_map.py"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -197,7 +197,7 @@
         "map_coord": {
           "x": 0,
           "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "comment": "大地图坐标【待配置】- 请在游戏中打开大地图，找到扬州府位置后运行 python calibrate_map.py"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -208,9 +208,9 @@
       },
       "绍兴府": {
         "map_coord": {
-          "x": 0,
-          "y": 0,
-          "comment": "大地图坐标【待配置】"
+          "x": 940,
+          "y": 687,
+          "comment": "大地图坐标【已标定】- 在大地图中央区域（有红色标记）"
         },
         "confirm_btn": null,
         "search_templates": [],
