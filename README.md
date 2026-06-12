@@ -6,7 +6,7 @@
 
 基于计算机视觉（OpenCV）的《江南百景图》白雪镇寒雪冰洞自动钓鱼脚本。通过 ADB 控制雷电模拟器，实时分析屏幕画面，自动识别收杆圆盘上的光珠位置，在最佳时机点击「拉一下」按钮，实现全自动钓鱼循环。
 
-> 当前版本：**v4.2** — 大地图两步点击进入 + 城镇视图判定（州府印→弹窗→大地图）
+> 当前版本：**v4.2** — 所有府大地图坐标OCR自动标定 + 坐标模式支持滚动偏移
 
 ---
 
@@ -34,10 +34,11 @@
 | 🔄 **再来一次** | 自动点击「收杆/领取」→「再来一次」，实现无限循环 |
 | ⚠️ **失误保护** | 连续多次未检测到光珠自动进入结果处理，失败后自动重试 |
 | ⏱️ **超时保护** | 60 秒无响应自动退出 + Windows 弹窗通知 + alert.txt 记录 |
-| 🗺️ **州府切换** | 大地图州府切换：**OCR文字识别** / 坐标直点 / 模板匹配 三种模式，自动降级 |
+| 🗺️ **州府切换** | 大地图州府切换：**OCR文字识别** / 坐标直点(支持滚动偏移) / 模板匹配 三种模式，自动降级 |
 | 🏷️ **两步进入** | v4.2 新增：州府印→弹窗→大地图，自动检测弹窗并点击"大地图"按钮 |
 | 🎯 **界面判定** | 左下角红色比例检测：自动区分大地图(<8%)和城镇视图(>20%) |
-| 🆕 **OCR 引擎** | v4.1 新增：PaddleOCR / EasyOCR / MSER 三引擎自动检测，无需手动配置 |
+| 🆕 **OCR 引擎** | v4.1 新增：RapidOCR / PaddleOCR / EasyOCR / MSER 四引擎自动检测 |
+| 🗺️ **坐标滚动** | v4.2 新增：坐标模式支持 `scroll_x`/`scroll_y` 滚动偏移，适应超屏幕尺寸大地图 |
 | 📦 **模块化** | v4.0 重构：公共模块 + 功能模块分离，`launcher.py` 统一入口 |
 
 ---
@@ -61,10 +62,12 @@ pip install opencv-python numpy
 
 **OCR 依赖（推荐，用于大地图州府文字识别）：**
 ```bash
-# 推荐：PaddleOCR（中文精度最高）
-pip install paddlepaddle paddleocr
+# 推荐：RapidOCR（轻量快速，中文精度高）
+pip install rapidocr
 
-# 备选：EasyOCR
+# 备选：PaddleOCR / EasyOCR
+pip install paddlepaddle paddleocr
+# 或
 pip install easyocr
 
 # 若不安装 OCR 库，将降级为 MSER 纯区域检测（仅定位不识别文字）
@@ -213,7 +216,7 @@ python launcher.py fish --retry
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `map_coord` | `{x:0, y:0}` | 大地图上该州府的像素坐标（0=未配置，需用 `diagnose-map` 获取） |
+| `map_coord` | `{x:0, y:0, scroll_x:0, scroll_y:0}` | 大地图上该州府的像素坐标 + 滚动偏移量（0=未配置，需用 `diagnose-map` 获取） |
 | `confirm_btn` | `null` | 该州府专属确认按钮坐标（null 则回退到 `default_confirm_btn`） |
 | `search_templates` | `[]` | 模板匹配用图片文件名（位于 `templates/` 目录） |
 | `travel_bag.target` | `白雪镇` | 默认目标城镇名称（switch-town 模式） |
@@ -243,9 +246,13 @@ JianNanBJT/
 │   ├── __init__.py
 │   └── bot.py             # FishingBot 状态机（IDLE → FISHING → ROUND_OVER → STOP）
 │
-├── map_switch/            # ★ 大地图州府切换（v4.1 OCR 完整实现）
+├── map_switch/            # ★ 大地图州府切换（v4.2 坐标滚动偏移支持）
 │   ├── __init__.py
-│   └── prefecture.py      # PrefectureSwitcher（OCR/坐标/模板 三模式降级）
+│   └── prefecture.py      # PrefectureSwitcher（OCR/坐标(支持滚动)/模板 三模式降级）
+│                           #   + _scroll_to() 按偏移量自动滚动大地图
+├── map_explorer.py         # 大地图网格扫描 + MSER区域检测 + 交互式标定（v4.2 新增）
+├── rapid_ocr_calibrate.py  # RapidOCR 自动标定所有府坐标（v4.2 新增）
+├── four_dir_scan.py        # 四方向扫描大地图（解决5x5网格遗漏问题，v4.2 新增）
 │                           #   + _ensure_on_big_map() 两步进入
 │                           #   + _exit_big_map() 返回城镇
 │                           #   + _is_popup_open() 弹窗检测
@@ -328,13 +335,16 @@ python launcher.py --help  # 应显示 v4.0
 ### Q: 脚本 60 秒后自动退出？
 这是超时保护机制，防止无限等待。检查项目目录下的 `alert.txt` 了解退出原因。可在 `config.json` 中调整 `timing.activity_timeout`（秒）。
 
-### Q: v4.1 的州府切换功能怎么用？
+### Q: v4.2 的州府切换功能怎么用？
 
-州府切换已完整实现 **OCR 文字识别** 和 **两步大地图进入**，无需预先配置坐标即可使用。
+州府切换已完整实现 **OCR 文字识别**、**坐标模式(支持滚动偏移)** 和 **两步大地图进入**，所有府坐标已预配置。
 
 **自动模式（推荐）：**
 ```bash
-# 1. 安装 PaddleOCR（中文精度最高）
+# 1. 安装 RapidOCR（推荐，轻量快速）
+pip install rapidocr
+
+# 或 PaddleOCR（中文精度最高）
 pip install paddlepaddle paddleocr
 
 # 2. 在任意城镇界面运行（自动两步进入大地图）
@@ -374,13 +384,17 @@ python launcher.py diagnose-map
 
 ## 更新日志
 
-### v4.2（2026-06-12）
-- ★ **两步大地图进入**：发现州府印点击后弹出菜单（非直接进入大地图），实现两步流程
-- ★ **州府印弹窗检测**：新增 `_is_popup_open()` 方法，HSV红色检测确认弹窗状态
-- ★ **界面判定增强**：`_is_on_big_map()` 新增策略0—左下角红色比例检测（<8%→大地图, >20%→城镇）
-- ★ **坐标精确定标**：`big_map_enter_btn`→(108,908) 州府印中心，`big_map_menu_btn`→(218,389) 弹窗按钮
-- ★ 新增 `popup_wait` 配置项(0.5s)，控制弹窗等待时间
-- ★ `_ensure_on_big_map()` 全部重写：截图→检测→两步点击→验证 完整流程
+### v4.2（2026-06-13）
+- ★ **所有府大地图坐标OCR自动标定完成**（7/7，排除白雪镇）：应天府/苏州府/杭州府/松江府/徽州府/扬州府/绍兴府
+- ★ **坐标模式支持滚动偏移**：`map_coord` 新增 `scroll_x`/`scroll_y`，`_try_coordinate_mode` 先滚动再点击
+- ★ 新增 `_scroll_to()` 方法：按偏移量自动计算滑动步数（支持超屏幕尺寸大地图）
+- ★ **RapidOCR 替代 PaddleOCR**：解决 PaddlePaddle 3.x 与 PaddleOCR 3.x 不兼容问题
+- ★ 新增 `map_explorer.py`：3x3/5x5 网格扫描 + MSER区域检测 + 交互式标定
+- ★ 新增 `rapid_ocr_calibrate.py`：RapidOCR 自动识别府名并标定坐标
+- ★ 新增 `four_dir_scan.py`：四方向扫描（从默认视图出发，解决5x5从左上角扫描遗漏问题）
+- ★ **两步大地图进入**：发现州府印点击后弹出菜单，实现两步流程（州府印→弹窗→大地图）
+- ★ **界面判定增强**：`_is_on_big_map()` 新增策略0—左下角红色比例检测
+- ★ 新增 `popup_wait` 配置项(0.5s)
 
 ### v4.1（2026-06-07）
 - ★ **OCR 文字识别完整实现**：大地图州府切换支持真正的文字识别
