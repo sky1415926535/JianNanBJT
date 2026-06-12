@@ -405,16 +405,19 @@ class PrefectureSwitcher:
         return False
 
     # ================================================================
-    # Mode 1: 坐标直点
+    # Mode 1: 坐标直点（支持滚动偏移）
     # ================================================================
     def _try_coordinate_mode(self, target, pref_info):
         """
         使用预配置坐标直接点击州府标记。
 
+        改进（v4.2）: 支持 scroll_x / scroll_y 滚动偏移量，
+        先滚动到目标位置再点击坐标。
+
         流程:
-          1. 读取 map_coord 坐标
-          2. 若未配置 → 报错并返回 False
-          3. 执行点击 → 延时 → 返回 True
+          1. 读取 map_coord 坐标和滚动偏移
+          2. 若偏移量非 (0,0)，先执行滚动
+          3. 点击目标坐标 → 延时 → 返回 True
 
         参数:
           target: str，州府名称。
@@ -425,6 +428,8 @@ class PrefectureSwitcher:
         """
         coord = pref_info.get("map_coord", {})
         px, py = coord.get("x", 0), coord.get("y", 0)
+        scroll_x = coord.get("scroll_x", 0)
+        scroll_y = coord.get("scroll_y", 0)
 
         if px == 0 and py == 0:
             log.error(
@@ -432,6 +437,13 @@ class PrefectureSwitcher:
                 f"  请运行 python launcher.py diagnose-map 获取坐标后填入 config.json"
             )
             return False
+
+        # ---- 滚动到目标位置 ----
+        if scroll_x != 0 or scroll_y != 0:
+            log.info(
+                f"[坐标模式] 需要先滚动到偏移 ({scroll_x}, {scroll_y})"
+            )
+            self._scroll_to(scroll_x, scroll_y)
 
         log.info(f"[坐标模式] 点击州府 '{target}' 坐标 ({px}, {py})")
         ADB.tap(px, py)
@@ -739,6 +751,53 @@ class PrefectureSwitcher:
     def _is_town_loaded(self, img):
         """检测城镇界面是否已加载完成（预留）。"""
         return True
+
+    # ----------------------------------------------------------------
+    # 大地图辅助: 滚动到指定偏移量
+    # ----------------------------------------------------------------
+    def _scroll_to(self, target_x, target_y, step=None):
+        """
+        滚动大地图到指定偏移量（假设当前在默认视图 0,0）。
+
+        滚动方向:
+          target_x > 0 → 向左滑动（内容向右移）
+          target_y > 0 → 向下滑动（内容向下移）
+
+        参数:
+          target_x: int，目标水平偏移像素
+          target_y: int，目标垂直偏移像素
+          step: int | None，单次滑动距离，None 时使用配置值
+        """
+        if step is None:
+            step = self.pref_cfg.get("ocr_search", {}).get("swipe_distance", 250)
+
+        # 横向滚动
+        if target_x > 0:
+            steps_x = (target_x + step // 2) // step
+            log.info(f"[滚动] 水平: 需要向左 {steps_x} 步 (每步 {step}px)")
+            for _ in range(steps_x):
+                self._swipe_map("left", step)
+                time.sleep(0.3)
+        elif target_x < 0:
+            steps_x = (-target_x + step // 2) // step
+            log.info(f"[滚动] 水平: 需要向右 {steps_x} 步 (每步 {step}px)")
+            for _ in range(steps_x):
+                self._swipe_map("right", step)
+                time.sleep(0.3)
+
+        # 纵向滚动
+        if target_y > 0:
+            steps_y = (target_y + step // 2) // step
+            log.info(f"[滚动] 垂直: 需要向下 {steps_y} 步 (每步 {step}px)")
+            for _ in range(steps_y):
+                self._swipe_map("down", step)
+                time.sleep(0.3)
+        elif target_y < 0:
+            steps_y = (-target_y + step // 2) // step
+            log.info(f"[滚动] 垂直: 需要向上 {steps_y} 步 (每步 {step}px)")
+            for _ in range(steps_y):
+                self._swipe_map("up", step)
+                time.sleep(0.3)
 
     # ----------------------------------------------------------------
     # 大地图辅助: 滑动操作

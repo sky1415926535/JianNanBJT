@@ -132,6 +132,8 @@
         "map_coord": {
           "x": 383,
           "y": 617,
+          "scroll_x": 0,
+          "scroll_y": 0,
           "comment": "大地图坐标【OCR标定】- center_default 默认视图"
         },
         "confirm_btn": null,
@@ -145,6 +147,8 @@
         "map_coord": {
           "x": 1476,
           "y": 189,
+          "scroll_x": 0,
+          "scroll_y": 594,
           "comment": "大地图坐标【OCR标定】- r1_c0 偏移(0,594) 识别:苏州府"
         },
         "confirm_btn": null,
@@ -158,7 +162,9 @@
         "map_coord": {
           "x": 789,
           "y": 352,
-          "comment": "大地图坐标【已标定】- 在大地图上方中部区域"
+          "scroll_x": 1056,
+          "scroll_y": 0,
+          "comment": "大地图坐标【OCR标定】- r0_c1 偏移(1056,0)"
         },
         "confirm_btn": null,
         "search_templates": [],
@@ -171,6 +177,8 @@
         "map_coord": {
           "x": 1395,
           "y": 136,
+          "scroll_x": 1056,
+          "scroll_y": 594,
           "comment": "大地图坐标【OCR标定】- r1_c1 偏移(1056,594) 识别:松江府"
         },
         "confirm_btn": null,
@@ -184,6 +192,8 @@
         "map_coord": {
           "x": 301,
           "y": 1056,
+          "scroll_x": 0,
+          "scroll_y": 594,
           "comment": "大地图坐标【OCR标定】- r1_c0 偏移(0,594) 识别:徽州府"
         },
         "confirm_btn": null,
@@ -197,6 +207,8 @@
         "map_coord": {
           "x": 260,
           "y": 296,
+          "scroll_x": 0,
+          "scroll_y": 0,
           "comment": "大地图坐标【OCR标定】- r0_c0 偏移(0,0) 识别:扬州府"
         },
         "confirm_btn": null,
@@ -210,7 +222,9 @@
         "map_coord": {
           "x": 940,
           "y": 687,
-          "comment": "大地图坐标【已标定】- 在大地图中央区域（有红色标记）"
+          "scroll_x": 1056,
+          "scroll_y": 1188,
+          "comment": "大地图坐标【OCR标定】- r2_c1 偏移(1056,1188)"
         },
         "confirm_btn": null,
         "search_templates": [],
