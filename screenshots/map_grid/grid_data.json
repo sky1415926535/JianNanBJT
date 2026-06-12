@@ -1,0 +1,245 @@
+{
+  "timestamp": "2026-06-13T00:26:39.575759",
+  "screen_size": [
+    1920,
+    1080
+  ],
+  "grid": {
+    "rows": 5,
+    "cols": 5
+  },
+  "swipe_step": [
+    1056,
+    594
+  ],
+  "positions": [
+    {
+      "idx": 0,
+      "name": "r0_c0",
+      "row": 0,
+      "col": 0,
+      "scroll_x": 0,
+      "scroll_y": 0
+    },
+    {
+      "idx": 1,
+      "name": "r0_c1",
+      "row": 0,
+      "col": 1,
+      "scroll_x": 1056,
+      "scroll_y": 0
+    },
+    {
+      "idx": 2,
+      "name": "r0_c2",
+      "row": 0,
+      "col": 2,
+      "scroll_x": 2112,
+      "scroll_y": 0
+    },
+    {
+      "idx": 3,
+      "name": "r0_c3",
+      "row": 0,
+      "col": 3,
+      "scroll_x": 3168,
+      "scroll_y": 0
+    },
+    {
+      "idx": 4,
+      "name": "r0_c4",
+      "row": 0,
+      "col": 4,
+      "scroll_x": 4224,
+      "scroll_y": 0
+    },
+    {
+      "idx": 5,
+      "name": "r1_c0",
+      "row": 1,
+      "col": 0,
+      "scroll_x": 0,
+      "scroll_y": 594
+    },
+    {
+      "idx": 6,
+      "name": "r1_c1",
+      "row": 1,
+      "col": 1,
+      "scroll_x": 1056,
+      "scroll_y": 594
+    },
+    {
+      "idx": 7,
+      "name": "r1_c2",
+      "row": 1,
+      "col": 2,
+      "scroll_x": 2112,
+      "scroll_y": 594
+    },
+    {
+      "idx": 8,
+      "name": "r1_c3",
+      "row": 1,
+      "col": 3,
+      "scroll_x": 3168,
+      "scroll_y": 594
+    },
+    {
+      "idx": 9,
+      "name": "r1_c4",
+      "row": 1,
+      "col": 4,
+      "scroll_x": 4224,
+      "scroll_y": 594
+    },
+    {
+      "idx": 10,
+      "name": "r2_c0",
+      "row": 2,
+      "col": 0,
+      "scroll_x": 0,
+      "scroll_y": 1188
+    },
+    {
+      "idx": 11,
+      "name": "r2_c1",
+      "row": 2,
+      "col": 1,
+      "scroll_x": 1056,
+      "scroll_y": 1188
+    },
+    {
+      "idx": 12,
+      "name": "r2_c2",
+      "row": 2,
+      "col": 2,
+      "scroll_x": 2112,
+      "scroll_y": 1188
+    },
+    {
+      "idx": 13,
+      "name": "r2_c3",
+      "row": 2,
+      "col": 3,
+      "scroll_x": 3168,
+      "scroll_y": 1188
+    },
+    {
+      "idx": 14,
+      "name": "r2_c4",
+      "row": 2,
+      "col": 4,
+      "scroll_x": 4224,
+      "scroll_y": 1188
+    },
+    {
+      "idx": 15,
+      "name": "r3_c0",
+      "row": 3,
+      "col": 0,
+      "scroll_x": 0,
+      "scroll_y": 1782
+    },
+    {
+      "idx": 16,
+      "name": "r3_c1",
+      "row": 3,
+      "col": 1,
+      "scroll_x": 1056,
+      "scroll_y": 1782
+    },
+    {
+      "idx": 17,
+      "name": "r3_c2",
+      "row": 3,
+      "col": 2,
+      "scroll_x": 2112,
+      "scroll_y": 1782
+    },
+    {
+      "idx": 18,
+      "name": "r3_c3",
+      "row": 3,
+      "col": 3,
+      "scroll_x": 3168,
+      "scroll_y": 1782
+    },
+    {
+      "idx": 19,
+      "name": "r3_c4",
+      "row": 3,
+      "col": 4,
+      "scroll_x": 4224,
+      "scroll_y": 1782
+    },
+    {
+      "idx": 20,
+      "name": "r4_c0",
+      "row": 4,
+      "col": 0,
+      "scroll_x": 0,
+      "scroll_y": 2376
+    },
+    {
+      "idx": 21,
+      "name": "r4_c1",
+      "row": 4,
+      "col": 1,
+      "scroll_x": 1056,
+      "scroll_y": 2376
+    },
+    {
+      "idx": 22,
+      "name": "r4_c2",
+      "row": 4,
+      "col": 2,
+      "scroll_x": 2112,
+      "scroll_y": 2376
+    },
+    {
+      "idx": 23,
+      "name": "r4_c3",
+      "row": 4,
+      "col": 3,
+      "scroll_x": 3168,
+      "scroll_y": 2376
+    },
+    {
+      "idx": 24,
+      "name": "r4_c4",
+      "row": 4,
+      "col": 4,
+      "scroll_x": 4224,
+      "scroll_y": 2376
+    }
+  ],
+  "screenshots": [
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r0_c0.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r0_c1.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r0_c2.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r0_c3.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r0_c4.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r1_c0.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r1_c1.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r1_c2.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r1_c3.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r1_c4.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r2_c0.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r2_c1.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r2_c2.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r2_c3.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r2_c4.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r3_c0.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r3_c1.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r3_c2.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r3_c3.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r3_c4.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r4_c0.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r4_c1.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r4_c2.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r4_c3.png",
+    "E:\\AI-workspace\\JianNanBJT\\screenshots\\map_grid\\r4_c4.png"
+  ],
+  "regions_by_position": {}
+}
