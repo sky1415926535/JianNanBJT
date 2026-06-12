@@ -234,7 +234,7 @@ JianNanBJT/
 ├── common/                # ★ 公共模块（v4.0 新增）
 │   ├── __init__.py
 │   ├── paths.py           # 路径常量（SCRIPT_DIR / TEMPLATE_DIR / SCREENSHOT_DIR 等）
-│   ├── adb.py             # ADB 封装（设备检测/连接/截图/点击/滑动）
+│   ├── adb.py             # ADB 封装（设备检测/连接/截图/点击/滑动/返回键）
 │   ├── vision.py          # 视觉识别（光珠检测/区域判定/模板匹配/红色按钮检测）
 │   ├── ocr.py             # ★ OCR 文字识别（v4.1 新增，PaddleOCR/EasyOCR/MSER）
 │   └── config.py          # 配置加载/保存 + DEFAULT_CONFIG 定义
@@ -245,18 +245,46 @@ JianNanBJT/
 │
 ├── map_switch/            # ★ 大地图州府切换（v4.1 OCR 完整实现）
 │   ├── __init__.py
-│   └── prefecture.py     # PrefectureSwitcher（OCR/坐标/模板 三模式降级）
+│   └── prefecture.py      # PrefectureSwitcher（OCR/坐标/模板 三模式降级）
+│                           #   + _ensure_on_big_map() 两步进入
+│                           #   + _exit_big_map() 返回城镇
+│                           #   + _is_popup_open() 弹窗检测
+│                           #   + _is_on_big_map() 四层降级检测
 │
 ├── travel_bag/            # ★ 行囊城镇切换（v4.0 新增，骨架代码）
 │   ├── __init__.py
-│   └── town_switch.py   # TownSwitcher 类（待截图确认 UI 后实现）
+│   └── town_switch.py     # TownSwitcher 类（待截图确认 UI 后实现）
 │
 ├── templates/             # 弹窗模板图片（success/failure/close/confirm 等）
 ├── screenshots/           # 调试截图保存目录（已 .gitignore）
+├── tests/                  # ★ 测试与探索脚本（v4.1-v4.2 大地图入口探索历程）
+│   │
+│   ├── ── UI 分析阶段 ──
+│   ├── test_full_analysis.py   # 全面分析游戏屏幕布局，理解 UI 结构
+│   └── test_analyze_ui.py      # 不按返回键，直接分析当前界面组成
+│   │
+│   ├── ── 按钮探索阶段 ──
+│   ├── test_find_bigmap.py     # 全面检测左侧 UI 区域所有按钮
+│   ├── test_bottom_buttons.py  # 逐个尝试底部圆形按钮，找大地图入口
+│   ├── test_find_map_btn.py    # 在游戏内容区域重新定位入口按钮
+│   ├── test_try_game_coords.py # 估算游戏坐标→屏幕坐标映射，测试左下角
+│   └── test_grid_explore.py    # 网格化全屏点击，系统探索所有可交互元素
+│   │
+│   ├── ── 州府印定位阶段 ──
+│   ├── test_find_seal.py        # 颜色分割定位"州府印"红色圆形印章 ★发现
+│   ├── test_best_candidates.py # 测试最有希望的候选坐标组合
+│   └── test_final_analysis.py  # 精确分析 UI 布局，定标州府印坐标
+│   │
+│   └── ── 验证阶段 ──
+│       ├── test_verify_bigmap.py  # 多维度分析验证是否真的进入大地图
+│       └── test_enter_bigmap.py # 点击州府印→进入大地图 ★最终验证
+│
 ├── .gitignore
 ├── LICENSE
 └── README.md
 ```
+
+> **提示**：`tests/` 中的 12 个脚本记录了从全屏盲搜到精确定标 (108,908) 的完整探索过程，按执行时间先后分为 UI分析 → 按钮探索 → 州府印定位 → 验证 四个阶段。
 
 ### 模块依赖关系
 
@@ -268,7 +296,7 @@ launcher.py
   ├── common/vision.py     # 视觉识别
   ├── fishing/bot.py       # 钓鱼状态机
   ├── map_switch/prefecture.py   # 州府切换
-  └── travel_bag/town_switch.py # 城镇切换
+  └── travel_bag/town_switch.py  # 城镇切换
 ```
 
 ---

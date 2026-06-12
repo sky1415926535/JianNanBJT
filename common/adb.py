@@ -202,6 +202,20 @@ class ADB:
         )
 
     @classmethod
+    def shell(cls, cmd):
+        """执行 ADB shell 命令"""
+        adb = cls.get_adb()
+        subprocess.run(
+            [adb, "shell", cmd],
+            capture_output=True, timeout=5
+        )
+
+    @classmethod
+    def press_back(cls):
+        """按 Android 返回键"""
+        cls.shell("input keyevent 4")
+
+    @classmethod
     def get_screen_size(cls):
         """获取模拟器屏幕分辨率，返回 (width, height) 或 None"""
         adb = cls.get_adb()

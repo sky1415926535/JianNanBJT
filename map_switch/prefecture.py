@@ -118,7 +118,7 @@ class PrefectureSwitcher:
     # ----------------------------------------------------------------
     # 主入口
     # ----------------------------------------------------------------
-    def switch_to(self, target=None):
+    def switch_to(self, target=None, return_to_town=True):
         """
         切换到目标州府（完整流程入口）。
 
@@ -127,9 +127,11 @@ class PrefectureSwitcher:
           2. _navigate_to(target)    → 定位并点击目标州府（多模式降级）
           3. _handle_confirm_popup() → 处理确认弹窗
           4. _wait_for_loading()     → 等待城镇加载
+          5. _exit_big_map()         → 从大地图返回城镇视图（v4.2新增）
 
         参数:
           target: str | None，州府名称。None 使用配置中的 target 默认值。
+          return_to_town: bool，切换后是否从大地图返回城镇视图（默认 True）。
 
         返回:
           bool: 切换成功为 True。
@@ -154,6 +156,10 @@ class PrefectureSwitcher:
 
         # ---- Step 4: 等待加载 ----
         self._wait_for_loading()
+
+        # ---- Step 5: 从大地图返回城镇视图 ----
+        if return_to_town:
+            self._exit_big_map()
 
         log.info(f"[州府切换] 成功切换到: {target}")
         return True
@@ -223,6 +229,29 @@ class PrefectureSwitcher:
             log.warning(f"[大地图] 第{attempt + 1}次未成功，重试...")
 
         log.warning("[大地图] 多次尝试后仍未检测到大地图界面，假设已进入")
+        return True
+
+    def _exit_big_map(self):
+        """
+        从大地图返回城镇视图（反向流程）。
+
+        策略:
+          按 Android 返回键（已验证有效，红色比例从 ~16% → ~53%）。
+
+        返回:
+          bool: 已返回城镇视图为 True。
+        """
+        log.info("[反向流程] 大地图 → 城镇视图（按 Android 返回键）")
+        ADB.press_back()
+        time.sleep(self.pref_cfg.get("loading_wait", 2.0))
+
+        # 验证是否返回城镇视图
+        img = ADB.screenshot()
+        if img is not None and not self._is_on_big_map(img):
+            log.info("[反向流程] 已成功返回城镇视图")
+            return True
+
+        log.warning("[反向流程] 未能确认返回城镇视图，假设已返回")
         return True
 
     def _is_popup_open(self, img):
