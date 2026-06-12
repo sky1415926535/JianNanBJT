@@ -1,5 +1,5 @@
 """
-大地图州府切换模块 (v4.1 — OCR 文字识别完整实现)
+大地图州府切换模块 (v4.2.1 — 修复红按钮误触+返回键退出安全保护)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 功能：在大地图上定位并切换到目标州府。
@@ -236,22 +236,51 @@ class PrefectureSwitcher:
         从大地图返回城镇视图（反向流程）。
 
         策略:
-          按 Android 返回键（已验证有效，红色比例从 ~16% → ~53%）。
+          1. 先检测是否已不在大地图（如切换后自动跳转城镇视图）
+          2. 若仍在大地图，按 Android 返回键（最多1次，防止误退）
+          3. 验证返回结果
+
+        安全保护（v4.2.1）:
+          - 仅在确认处于大地图时按返回键，避免误触退出游戏
+          - 州府切换成功 → 游戏自动跳转城镇视图 → 无需按返回
+          - 最多按1次返回键，即使误判也不会触发二次返回→退出
+          - 检测到"退出游戏"弹窗时自动取消
 
         返回:
           bool: 已返回城镇视图为 True。
         """
+        # 先检查当前状态：可能切换后已经自动在城镇视图了
+        img = ADB.screenshot()
+        if img is not None and not self._is_on_big_map(img):
+            log.info("[反向流程] 已自动返回城镇视图，无需按返回键")
+            return True
+
+        # 确实在大地图，按返回键退出（仅1次！）
         log.info("[反向流程] 大地图 → 城镇视图（按 Android 返回键）")
         ADB.press_back()
         time.sleep(self.pref_cfg.get("loading_wait", 2.0))
 
         # 验证是否返回城镇视图
-        img = ADB.screenshot()
-        if img is not None and not self._is_on_big_map(img):
-            log.info("[反向流程] 已成功返回城镇视图")
-            return True
+        img2 = ADB.screenshot()
+        if img2 is not None:
+            # v4.2.1: 检测是否触发了"退出游戏"弹窗
+            red_btns = self.vision.find_red_buttons(img2)
+            # "再玩一会"按钮通常在右下角区域 (1000-1300, 650-800)
+            cancel_btns = [
+                b for b in red_btns
+                if 900 < b[0] < 1400 and 600 < b[1] < 850
+            ]
+            if cancel_btns:
+                bx, by = cancel_btns[0][0], cancel_btns[0][1]
+                log.warning(f"[反向流程] 检测到疑似退出弹窗，点击取消 ({bx},{by})")
+                ADB.tap(bx, by)
+                time.sleep(1)
 
-        log.warning("[反向流程] 未能确认返回城镇视图，假设已返回")
+            if not self._is_on_big_map(img2):
+                log.info("[反向流程] 已成功返回城镇视图")
+                return True
+
+        log.warning("[反向流程] 未能确认返回城镇视图，假设已返回（不再尝试）")
         return True
 
     def _is_popup_open(self, img):
@@ -304,16 +333,33 @@ class PrefectureSwitcher:
         检测当前是否在大地图界面。
 
         检测策略（按优先级）:
-          0. 左下角红色比例检测: 城镇视图有州府印（红色比例 > 20%），
+          0. OCR 辅助检测（v4.2.1 新增）: 识别"府印"/"级"/"营造"/"任务"
+             等城镇视图特有关键词 → 判定不在大地图
+          1. 左下角红色比例检测: 城镇视图有州府印（红色比例 > 20%），
              大地图州府印消失（红色比例 < 10%）
-          1. 模板匹配：检测预置的大地图特征图
-          2. 行囊按钮检测：搜索行囊按钮特征
-          3. 文字区域密度检测：大地图上州府名称文字较多
+          2. 模板匹配：检测预置的大地图特征图
+          3. 行囊按钮检测：搜索行囊按钮特征
+          4. 文字区域密度检测：大地图上州府名称文字较多
 
         返回:
           bool: True 表示当前在大地图。
         """
-        # ---- 策略0: 左下角红色比例检测（v4.2 新增，最可靠） ----
+        # ---- 策略0: OCR 辅助检测（v4.2.1 新增） ----
+        # 城镇视图通常有 "府印"、"级"、"营造"、"任务"、"绘画"、"居民" 等关键词
+        # 大地图上这些关键词不会出现
+        try:
+            town_keywords = ["府印", "营造", "任务", "绘画", "居民", "月卡"]
+            ocr_results = self.ocr.recognize(img, min_conf=0.5)
+            if ocr_results:
+                for r in ocr_results:
+                    for kw in town_keywords:
+                        if kw in r["text"]:
+                            log.debug(f"[大地图检测] OCR识别到'{r['text']}'含'{kw}' → 判定为城镇视图")
+                            return False
+        except Exception as e:
+            log.debug(f"[大地图检测] OCR辅助检测异常: {e}")
+
+        # ---- 策略1: 左下角红色比例检测（v4.2 新增，最可靠） ----
         h, w = img.shape[:2]
         lb = img[int(h * 0.65):h, 0:int(w * 0.13)]  # 左下角 ~13% 宽度, ~35% 高度
 
@@ -326,13 +372,14 @@ class PrefectureSwitcher:
             red_ratio = np.sum(red_mask) / red_mask.size
 
             if red_ratio < 0.08:
-                log.info(f"[大地图检测] 左下角红色比例={red_ratio:.3f} < 0.08 → 判定为大地图（州府印消失）")
-                return True
+                # 红色比例低 + 无OCR城镇特征 → 可能是大地图
+                # 但需要结合后续策略确认（防止某些城镇视图也低）
+                pass  # 不再直接返回True，继续其他策略验证
             elif red_ratio > 0.20:
                 log.debug(f"[大地图检测] 左下角红色比例={red_ratio:.3f} > 0.20 → 判定为城镇视图（州府印可见）")
                 return False
-            # 灰色区域 (0.08 ~ 0.20): 不确定，继续其他策略
-            log.debug(f"[大地图检测] 左下角红色比例={red_ratio:.3f} 在灰色区域，继续其他检测...")
+            else:
+                log.debug(f"[大地图检测] 左下角红色比例={red_ratio:.3f} 在灰色区域，继续其他检测...")
         except Exception as e:
             log.debug(f"[大地图检测] 红色比例计算异常: {e}")
 
@@ -380,9 +427,10 @@ class PrefectureSwitcher:
           bool: 成功定位并点击为 True。
         """
         pref_info = self.pref_cfg.get("prefectures", {}).get(target)
+        # v4.2.1: 未配置的州府也允许走 OCR 搜索（空配置 + OCR 模式）
         if pref_info is None:
-            log.error(f"[定位] 未找到州府配置: {target}")
-            return False
+            log.warning(f"[定位] 州府 '{target}' 无预置配置，将仅使用 OCR 搜索模式")
+            pref_info = {}
 
         # 模式降级顺序
         mode_order = self.pref_cfg.get("mode_order", ["ocr", "coordinate", "template"])
@@ -393,8 +441,13 @@ class PrefectureSwitcher:
                 if self._try_ocr_search(target, pref_info):
                     return True
             elif mode == "coordinate":
-                if self._try_coordinate_mode(target, pref_info):
-                    return True
+                # 坐标模式需要 map_coord 配置
+                mc = pref_info.get("map_coord", {})
+                if mc and mc.get("x", 0) > 0:
+                    if self._try_coordinate_mode(target, pref_info):
+                        return True
+                else:
+                    log.info(f"[坐标模式] 跳过（{target} 无 map_coord 配置）")
             elif mode == "template":
                 if self._try_template_search(target, pref_info):
                     return True
@@ -414,10 +467,14 @@ class PrefectureSwitcher:
         改进（v4.2）: 支持 scroll_x / scroll_y 滚动偏移量，
         先滚动到目标位置再点击坐标。
 
+        改进（v4.2.1）: 支持 click_offset_y 点击偏移量，
+        OCR 标定的文字中心通常高于城池建筑，需下移 50~80px。
+
         流程:
           1. 读取 map_coord 坐标和滚动偏移
           2. 若偏移量非 (0,0)，先执行滚动
-          3. 点击目标坐标 → 延时 → 返回 True
+          3. 应用 click_offset_y 偏移（默认 +60）
+          4. 点击目标坐标 → 延时 → 返回 True
 
         参数:
           target: str，州府名称。
@@ -430,6 +487,8 @@ class PrefectureSwitcher:
         px, py = coord.get("x", 0), coord.get("y", 0)
         scroll_x = coord.get("scroll_x", 0)
         scroll_y = coord.get("scroll_y", 0)
+        # v4.2.1: 文字标签 → 城池建筑下移偏移（默认 +60px）
+        offset_y = coord.get("click_offset_y", 60)
 
         if px == 0 and py == 0:
             log.error(
@@ -445,8 +504,17 @@ class PrefectureSwitcher:
             )
             self._scroll_to(scroll_x, scroll_y)
 
-        log.info(f"[坐标模式] 点击州府 '{target}' 坐标 ({px}, {py})")
-        ADB.tap(px, py)
+        # ---- 应用点击偏移 ----
+        click_y = py + offset_y
+        if offset_y != 0:
+            log.info(
+                f"[坐标模式] 点击州府 '{target}' 坐标 ({px}, {py})"
+                f" → 偏移 +{offset_y} → ({px}, {click_y})"
+            )
+        else:
+            log.info(f"[坐标模式] 点击州府 '{target}' 坐标 ({px}, {py})")
+
+        ADB.tap(px, click_y)
         time.sleep(self.cfg["timing"]["popup_wait"])
         return True
 
@@ -558,16 +626,24 @@ class PrefectureSwitcher:
                     return True
 
             # ---- OCR 识别完成但没有匹配 ----
-            # 输出识别到的文字列表（便于诊断）
+            # 输出识别到的文字列表（便于诊断，v4.2.1 改为 INFO 级别）
             ocr_results = self.ocr.recognize(img, roi=roi, min_conf=0.3)
-            texts = [r["text"] for r in ocr_results if r["text"]]
+            texts = [(r["text"], r["conf"], r["center"]) for r in ocr_results if r["text"]]
             if texts:
-                log.debug(f"[OCR搜索] 本轮识别到: {texts[:15]}")
+                pref_texts = [t for t in texts if "府" in t[0] or "镇" in t[0]]
+                log.info(
+                    f"[OCR搜索] 第{swipe_count}轮: 识别{len(texts)}条"
+                    + (f", 州府: {pref_texts}" if pref_texts else "")
+                )
 
             # 未找到 → 滑动地图
             if swipe_count < max_swipes:
-                directions = ["up", "left", "down", "right"]
-                direction = directions[swipe_count % len(directions)]
+                # v4.2.1: 螺旋搜索策略 — 先密集扫一个方向再切换
+                # 方向序列: up×3, left×3, down×3, right×3, up×3, ...
+                spiral = []
+                for d in ["up", "left", "down", "right"]:
+                    spiral.extend([d] * 3)
+                direction = spiral[swipe_count % len(spiral)]
                 log.info(
                     f"[OCR搜索] 未找到，滑动 {direction} "
                     f"({swipe_count + 1}/{max_swipes})"
@@ -710,14 +786,24 @@ class PrefectureSwitcher:
                 time.sleep(self.cfg["timing"]["popup_wait"])
                 return True
 
-            # 策略2: 红色按钮检测
+            # 策略2: 红色按钮检测（v4.2 改进：过滤州府印误触）
+            # 州府印位于左下角 (x<200, y>800)，确认弹窗按钮应在屏幕中上部
+            # 过滤规则: 排除明显为州府印的底部大红斑
             red_btns = self.vision.find_red_buttons(img)
-            if red_btns:
-                bx, by, _, _, area = red_btns[0]
-                log.info(f"[确认弹窗] 检测到红色按钮: ({bx},{by}), 面积={area:.0f}")
+            confirm_btns = [
+                b for b in red_btns
+                if not (b[1] > 800 and b[0] < 300)  # 排除左下角州府印区域
+            ]
+            if confirm_btns:
+                bx, by, _, _, area = confirm_btns[0]
+                log.info(f"[确认弹窗] 检测到确认按钮: ({bx},{by}), 面积={area:.0f}")
                 ADB.tap(bx, by)
                 time.sleep(self.cfg["timing"]["popup_wait"])
                 return True
+            elif red_btns:
+                # 只有州府印级别的红按钮，跳过不点击（避免误触）
+                bx, by = red_btns[0][0], red_btns[0][1]
+                log.debug(f"[确认弹窗] 跳过疑似州府印红按钮: ({bx},{by})")
 
             # 策略3: 直接点击确认坐标
             if attempt == 0:

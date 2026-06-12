@@ -1,5 +1,5 @@
 """
-OCR 文字识别模块 (v4.1)
+OCR 文字识别模块 (v4.2.1)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 为大地图州府切换提供文字识别能力，支持多引擎自动切换。
@@ -7,7 +7,8 @@ OCR 文字识别模块 (v4.1)
 引擎优先级（自动检测）:
   1. PaddleOCR  — 百度开源，中文识别精度最高，pip 安装
   2. EasyOCR    — 多语言支持，pip 安装，需 PyTorch
-  3. MSER-only  — OpenCV 内置，无需额外依赖（仅定位不识别）
+  3. RapidOCR   — 基于 ONNX Runtime 的轻量 OCR（v4.2.1 新增，推荐备选）
+  4. MSER-only  — OpenCV 内置，无需额外依赖（仅定位不识别）
 
 特性:
   - 自动检测可用 OCR 引擎，无需手动配置
@@ -21,6 +22,9 @@ OCR 文字识别模块 (v4.1)
 
   # EasyOCR（备选）
   pip install easyocr
+
+  # RapidOCR（轻量备选，基于 ONNX，pip install rapidocr-onnxruntime）
+  pip install rapidocr-onnxruntime
 
   # 若都不装，降级为纯 MSER 区域检测
 """
@@ -48,10 +52,11 @@ def detect_engine():
     检测顺序:
       1. paddleocr (from paddleocr import PaddleOCR)
       2. easyocr (import easyocr)
-      3. mser_only（OpenCV 内置，永远可用）
+      3. rapidocr (from rapidocr import RapidOCR) — v4.2.1 新增
+      4. mser_only（OpenCV 内置，永远可用）
 
     返回:
-      str: "paddleocr" | "easyocr" | "mser_only"
+      str: "paddleocr" | "easyocr" | "rapidocr" | "mser_only"
     """
     global _AVAILABLE_ENGINE
 
@@ -76,7 +81,16 @@ def detect_engine():
     except ImportError:
         log.debug("[OCR引擎] EasyOCR 未安装")
 
-    # 3. 降级到 MSER-only
+    # 3. 检测 RapidOCR（v4.2.1 新增）
+    try:
+        from rapidocr import RapidOCR  # noqa: F401
+        _AVAILABLE_ENGINE = "rapidocr"
+        log.info("[OCR引擎] 检测到 RapidOCR（轻量 ONNX OCR）")
+        return _AVAILABLE_ENGINE
+    except ImportError:
+        log.debug("[OCR引擎] RapidOCR 未安装")
+
+    # 4. 降级到 MSER-only
     _AVAILABLE_ENGINE = "mser_only"
     log.info("[OCR引擎] 降级到 MSER-only（无 OCR 库可用）")
     return _AVAILABLE_ENGINE
@@ -99,6 +113,9 @@ def get_ocr_install_hint():
         "  ║                                              ║\n"
         "  ║  备选 EasyOCR:                                ║\n"
         "  ║    pip install easyocr                        ║\n"
+        "  ║                                              ║\n"
+        "  ║  备选 RapidOCR（轻量，推荐）:                   ║\n"
+        "  ║    pip install rapidocr-onnxruntime            ║\n"
         "  ║                                              ║\n"
         "  ║  当前将使用 MSER 纯区域检测（仅定位不识别）     ║\n"
         "  ╚══════════════════════════════════════════════╝\n"
@@ -135,6 +152,8 @@ class OCREngine:
             self._init_paddleocr()
         elif self.engine_name == "easyocr":
             self._init_easyocr()
+        elif self.engine_name == "rapidocr":
+            self._init_rapidocr()  # v4.2.1
         else:
             self._init_mser_only()
 
@@ -166,6 +185,18 @@ class OCREngine:
             log.info("[EasyOCR] 初始化成功 (CPU模式)")
         except Exception as e:
             log.error(f"[EasyOCR] 初始化失败: {e}")
+            log.warning("[OCR] 降级到 MSER-only")
+            self.engine_name = "mser_only"
+            self._init_mser_only()
+
+    def _init_rapidocr(self):
+        """初始化 RapidOCR（v4.2.1 新增，基于 ONNX Runtime 的轻量 OCR）。"""
+        try:
+            from rapidocr import RapidOCR
+            self._impl = RapidOCR()
+            log.info("[RapidOCR] 初始化成功（基于 ONNX Runtime）")
+        except Exception as e:
+            log.error(f"[RapidOCR] 初始化失败: {e}")
             log.warning("[OCR] 降级到 MSER-only")
             self.engine_name = "mser_only"
             self._init_mser_only()
@@ -215,6 +246,8 @@ class OCREngine:
             results = self._recognize_paddleocr(crop, min_conf)
         elif self.engine_name == "easyocr":
             results = self._recognize_easyocr(crop, min_conf)
+        elif self.engine_name == "rapidocr":
+            results = self._recognize_rapidocr(crop, min_conf)  # v4.2.1
         else:
             results = self._recognize_mser(crop)
 
@@ -285,6 +318,67 @@ class OCREngine:
                 })
         except Exception as e:
             log.error(f"[EasyOCR] 识别异常: {e}")
+
+        results.sort(key=lambda r: r["conf"], reverse=True)
+        return results
+
+    def _recognize_rapidocr(self, img, min_conf):
+        """
+        RapidOCR 识别（v4.2.1 新增）。
+
+        RapidOCR 基于 ONNX Runtime，轻量且中文识别效果好。
+        API: ocr(img_path_or_nparray) → RapidOCROutput
+          - .boxes: list of 4-point polygon [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+          - .txts: list of recognized text strings
+          - .scores: list of confidence scores
+
+        注意: 返回的是 RapidOCROutput 对象（非 tuple），通过属性访问。
+        """
+        results = []
+        try:
+            ocr_result = self._impl(img)
+            if ocr_result is None:
+                return results
+
+            # RapidOCR 返回 RapidOCROutput 对象（有 boxes/txts/scores 属性）
+            # 也兼容可能的元组返回格式
+            if hasattr(ocr_result, "boxes") and hasattr(ocr_result, "txts"):
+                boxes = ocr_result.boxes
+                txts = ocr_result.txts
+                scores = ocr_result.scores if hasattr(ocr_result, "scores") else [0.0] * len(txts)
+            elif isinstance(ocr_result, (list, tuple)) and len(ocr_result) >= 2:
+                boxes = ocr_result[0]
+                txts = ocr_result[1]
+                scores = ocr_result[2] if len(ocr_result) > 2 else [0.0] * len(txts)
+            else:
+                log.warning(f"[RapidOCR] 无法解析返回类型: {type(ocr_result)}")
+                return results
+
+            for i in range(min(len(boxes), len(txts))):
+                box = boxes[i]
+                text = txts[i] if i < len(txts) else ""
+                conf = scores[i] if i < len(scores) else 0.0
+
+                if not text or not text.strip():
+                    continue
+                if conf < min_conf:
+                    continue
+
+                # 四点 → 矩形 bbox
+                pts = np.array(box, dtype=np.int32)
+                x = int(pts[:, 0].min())
+                y = int(pts[:, 1].min())
+                w = int(pts[:, 0].max()) - x
+                h = int(pts[:, 1].max()) - y
+
+                results.append({
+                    "text": text.strip(),
+                    "bbox": (x, y, w, h),
+                    "center": (x + w // 2, y + h // 2),
+                    "conf": float(conf),
+                })
+        except Exception as e:
+            log.error(f"[RapidOCR] 识别异常: {e}")
 
         results.sort(key=lambda r: r["conf"], reverse=True)
         return results

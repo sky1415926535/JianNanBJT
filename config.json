@@ -58,7 +58,7 @@
     "retry_delay": 2.0
   },
   "prefecture": {
-    "target": "白雪镇",
+    "target": "宁波府",
     "mode": "ocr",
     "mode_order": [
       "ocr",
@@ -88,8 +88,8 @@
     },
     "loading_wait": 3.0,
     "ocr_search": {
-      "max_swipes": 5,
-      "swipe_distance": 250,
+      "max_swipes": 15,
+      "swipe_distance": 400,
       "swipe_interval": 0.8,
       "min_conf": 0.4,
       "fuzzy_match": true,
@@ -232,6 +232,16 @@
           "绍兴"
         ],
         "comment": "60级解锁"
+      },
+      "宁波府": {
+        "map_coord": {
+          "x": 1527,
+          "y": 762,
+          "scroll_x": 0,
+          "scroll_y": 0,
+          "click_offset_y": 60,
+          "comment": "大地图坐标【OCR标定】- 应天府视口left滑动后识别:宁波府"
+        }
       }
     }
   }
