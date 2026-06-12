@@ -73,6 +73,9 @@ import time
 import logging
 from pathlib import Path
 
+import numpy as np
+import cv2
+
 from common import ADB, Vision, load_config, SCREENSHOT_DIR
 from common.ocr import OCREngine, detect_engine, get_ocr_install_hint
 
@@ -162,18 +165,27 @@ class PrefectureSwitcher:
         """
         确保当前界面为大地图。
 
-        策略:
-          1. 截图 → 检测大地图特征（模板匹配顶部导航栏等）
-          2. 如果在 → 直接返回 True
-          3. 如果不在 → 点击 big_map_enter_btn → 等待 → 重新检测
-          4. 最多重试 3 次
+        两步操作流程（v4.2 更新）:
+          1. 点击左下角"州府印"（红色印章）
+          2. 等待弹窗出现（~0.5s）
+          3. 在弹窗中点击"大地图"按钮
+          4. 等待大地图加载
+
+        大地图 vs 城镇视图判定:
+          - 城镇视图: 左下角有大面积红色（州府印可见，红色比例 > 25%）
+          - 大地图: 左下角红色极少（州府印消失，红色比例 < 10%）
 
         返回:
           bool: 已在大地图界面为 True。
         """
         enter_btn = self.pref_cfg.get("big_map_enter_btn", {})
-        enter_x = enter_btn.get("x", 120)
-        enter_y = enter_btn.get("y", 980)
+        menu_btn = self.pref_cfg.get("big_map_menu_btn", {})
+        enter_x = enter_btn.get("x", 108)
+        enter_y = enter_btn.get("y", 908)
+        menu_x = menu_btn.get("x", 218)
+        menu_y = menu_btn.get("y", 389)
+        popup_wait = self.pref_cfg.get("popup_wait", 0.5)
+        loading_wait = self.pref_cfg.get("loading_wait", 3.0)
 
         for attempt in range(3):
             img = ADB.screenshot()
@@ -186,18 +198,85 @@ class PrefectureSwitcher:
                 log.info("[大地图] 已在大地图界面")
                 return True
 
-            log.info(f"[大地图] 尝试进入 (第{attempt + 1}次)，点击 ({enter_x}, {enter_y})")
+            # ---- 两步点击流程 ----
+            # Step A: 点击州府印 → 弹出功能菜单
+            log.info(f"[大地图] 第{attempt + 1}次尝试: 点击州府印 ({enter_x}, {enter_y})")
             ADB.tap(enter_x, enter_y)
-            time.sleep(self.pref_cfg.get("loading_wait", 2.0))
+            time.sleep(popup_wait)
+
+            # Step B: 检测弹窗是否出现，然后点击"大地图"按钮
+            img2 = ADB.screenshot()
+            if img2 is not None and self._is_popup_open(img2):
+                log.info(f"[大地图] 弹窗已打开，点击'大地图'按钮 ({menu_x}, {menu_y})")
+            else:
+                log.info(f"[大地图] 未检测到弹窗，直接点击'大地图'按钮 ({menu_x}, {menu_y})")
+
+            ADB.tap(menu_x, menu_y)
+            time.sleep(loading_wait)
+
+            # 验证是否进入大地图
+            img3 = ADB.screenshot()
+            if img3 is not None and self._is_on_big_map(img3):
+                log.info("[大地图] 已成功进入大地图界面")
+                return True
+
+            log.warning(f"[大地图] 第{attempt + 1}次未成功，重试...")
 
         log.warning("[大地图] 多次尝试后仍未检测到大地图界面，假设已进入")
         return True
+
+    def _is_popup_open(self, img):
+        """
+        检测州府印弹窗是否已打开。
+
+        检测策略:
+          在弹窗区域（x:60-460, y:140-400）检测红色按钮数量，
+          如果有 >= 3 个红色按钮区域则判定弹窗已打开。
+
+        参数:
+          img: numpy array，游戏截图。
+
+        返回:
+          bool: 弹窗已打开为 True。
+        """
+        try:
+            h, w = img.shape[:2]
+            if h < 400 or w < 460:
+                return False
+            roi = img[140:400, 60:460]
+
+            # 红色像素检测（HSV）
+            hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+            lower1 = np.array([0, 100, 100])
+            upper1 = np.array([10, 255, 255])
+            lower2 = np.array([160, 100, 100])
+            upper2 = np.array([180, 255, 255])
+            mask = cv2.bitwise_or(
+                cv2.inRange(hsv, lower1, upper1),
+                cv2.inRange(hsv, lower2, upper2)
+            )
+
+            # 查找红色轮廓
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            red_btn_count = 0
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area > 100:
+                    red_btn_count += 1
+
+            log.debug(f"[弹窗检测] 红色区域数量: {red_btn_count}")
+            return red_btn_count >= 3
+        except Exception as e:
+            log.debug(f"[弹窗检测] 异常: {e}")
+            return False
 
     def _is_on_big_map(self, img):
         """
         检测当前是否在大地图界面。
 
         检测策略（按优先级）:
+          0. 左下角红色比例检测: 城镇视图有州府印（红色比例 > 20%），
+             大地图州府印消失（红色比例 < 10%）
           1. 模板匹配：检测预置的大地图特征图
           2. 行囊按钮检测：搜索行囊按钮特征
           3. 文字区域密度检测：大地图上州府名称文字较多
@@ -205,6 +284,29 @@ class PrefectureSwitcher:
         返回:
           bool: True 表示当前在大地图。
         """
+        # ---- 策略0: 左下角红色比例检测（v4.2 新增，最可靠） ----
+        h, w = img.shape[:2]
+        lb = img[int(h * 0.65):h, 0:int(w * 0.13)]  # 左下角 ~13% 宽度, ~35% 高度
+
+        # 红色像素比例
+        try:
+            r_channel = lb[:, :, 2].astype(np.float32)
+            g_channel = lb[:, :, 1].astype(np.float32)
+            b_channel = lb[:, :, 0].astype(np.float32)
+            red_mask = (r_channel > 120) & (r_channel > g_channel * 1.2) & (r_channel > b_channel * 1.2)
+            red_ratio = np.sum(red_mask) / red_mask.size
+
+            if red_ratio < 0.08:
+                log.info(f"[大地图检测] 左下角红色比例={red_ratio:.3f} < 0.08 → 判定为大地图（州府印消失）")
+                return True
+            elif red_ratio > 0.20:
+                log.debug(f"[大地图检测] 左下角红色比例={red_ratio:.3f} > 0.20 → 判定为城镇视图（州府印可见）")
+                return False
+            # 灰色区域 (0.08 ~ 0.20): 不确定，继续其他策略
+            log.debug(f"[大地图检测] 左下角红色比例={red_ratio:.3f} 在灰色区域，继续其他检测...")
+        except Exception as e:
+            log.debug(f"[大地图检测] 红色比例计算异常: {e}")
+
         # 策略1: 模板匹配大地图特征
         match = self.vision.match_template(img, "big_map_navbar.png")
         if match:
@@ -221,9 +323,11 @@ class PrefectureSwitcher:
 
         # 策略3: 文字区域数量检测（大地图上通常有多个州府名称文字）
         # 在大地图中心区域搜索，如果有 >= 2 个文字区域则判定为大地图
-        h, w = img.shape[:2]
-        roi = (w // 4, h // 4, w // 2, h // 2)
-        text_regions = self.vision.find_text_regions(img, roi=roi, color_filter=True)
+        text_regions = self.vision.find_text_regions(
+            img,
+            roi=(w // 4, h // 4, w // 2, h // 2),
+            color_filter=True
+        )
         if len(text_regions) >= 2:
             log.info(f"[大地图检测] 检测到 {len(text_regions)} 个文字区域（推测为大地图）")
             return True

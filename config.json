@@ -20,20 +20,20 @@
     "yellow_end": 360
   },
   "buttons": {
-        "reel_x": 958,
-        "reel_y": 931,
-        "claim_x": 772,
-        "claim_y": 854,
-        "retry_x": 1141,
-        "retry_y": 854
+    "reel_x": 958,
+    "reel_y": 931,
+    "claim_x": 772,
+    "claim_y": 854,
+    "retry_x": 1141,
+    "retry_y": 854
   },
   "detection": {
-        "bead_brightness_min": 200,
-        "bead_min_area": 10,
-        "bead_max_area": 120,
-        "bead_circularity_min": 0.55,
-        "bead_track_tolerance": 20,
-        "match_threshold": 0.80,
+    "bead_brightness_min": 200,
+    "bead_min_area": 10,
+    "bead_max_area": 120,
+    "bead_circularity_min": 0.55,
+    "bead_track_tolerance": 20,
+    "match_threshold": 0.8,
     "disc_lost_timeout": 4.0,
     "bead_miss_threshold": 8,
     "result_wait": 2.0,
@@ -41,7 +41,7 @@
   },
   "timing": {
     "screenshot_cooldown": 0.06,
-    "min_click_interval": 0.20,
+    "min_click_interval": 0.2,
     "animation_wait": 0.3,
     "popup_wait": 0.8,
     "idle_timeout": 15.0,
@@ -60,10 +60,32 @@
   "prefecture": {
     "target": "白雪镇",
     "mode": "ocr",
-    "mode_order": ["ocr", "coordinate", "template"],
-    "big_map_enter_btn": {"x": 120, "y": 980, "comment": "大地图入口按钮坐标(左下角应天府印→大地图)"},
-    "big_map_indicator": {"x": 960, "y": 30, "comment": "大地图界面特征检测点"},
-    "default_confirm_btn": {"x": 960, "y": 600, "comment": "通用确认进入按钮"},
+    "mode_order": [
+      "ocr",
+      "coordinate",
+      "template"
+    ],
+    "big_map_enter_btn": {
+      "x": 108,
+      "y": 908,
+      "comment": "左下角州府印(红色印章) - 点击后弹出功能菜单"
+    },
+    "big_map_menu_btn": {
+      "x": 218,
+      "y": 389,
+      "comment": "州府印弹窗 - '大地图'按钮(五个红色按钮中最左边)"
+    },
+    "popup_wait": 0.5,
+    "big_map_indicator": {
+      "x": 960,
+      "y": 30,
+      "comment": "大地图界面特征检测点"
+    },
+    "default_confirm_btn": {
+      "x": 960,
+      "y": 600,
+      "comment": "通用确认进入按钮"
+    },
     "loading_wait": 3.0,
     "ocr_search": {
       "max_swipes": 5,
@@ -77,65 +99,124 @@
       "max_swipes": 8,
       "swipe_distance": 300,
       "swipe_interval": 0.8,
-      "directions": ["up", "down", "left", "right"],
+      "directions": [
+        "up",
+        "down",
+        "left",
+        "right"
+      ],
       "match_threshold": 0.75,
-      "search_area": {"x": 200, "y": 100, "w": 1520, "h": 800, "comment": "裁剪搜索区域减少干扰"}
+      "search_area": {
+        "x": 200,
+        "y": 100,
+        "w": 1520,
+        "h": 800,
+        "comment": "裁剪搜索区域减少干扰"
+      }
     },
     "prefectures": {
       "白雪镇": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["白雪"],
+        "aliases": [
+          "白雪"
+        ],
         "comment": "白雪镇(DLC活动州府)"
       },
       "应天府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["应天"],
+        "aliases": [
+          "应天"
+        ],
         "comment": "初始州府(0级解锁)"
       },
       "苏州府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["苏州"],
+        "aliases": [
+          "苏州"
+        ],
         "comment": "17级解锁"
       },
       "杭州府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["杭州"],
+        "aliases": [
+          "杭州"
+        ],
         "comment": "27级解锁"
       },
       "松江府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["松江"],
+        "aliases": [
+          "松江"
+        ],
         "comment": "37级解锁"
       },
       "徽州府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["徽州"],
+        "aliases": [
+          "徽州"
+        ],
         "comment": "47级解锁"
       },
       "扬州府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["扬州"],
+        "aliases": [
+          "扬州"
+        ],
         "comment": "54级解锁"
       },
       "绍兴府": {
-        "map_coord": {"x": 0, "y": 0, "comment": "大地图坐标【待配置】"},
+        "map_coord": {
+          "x": 0,
+          "y": 0,
+          "comment": "大地图坐标【待配置】"
+        },
         "confirm_btn": null,
         "search_templates": [],
-        "aliases": ["绍兴"],
+        "aliases": [
+          "绍兴"
+        ],
         "comment": "60级解锁"
       }
     }

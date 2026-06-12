@@ -177,10 +177,10 @@ class OCREngine:
     def _init_mser_only(self):
         """初始化 MSER-only 模式（无需额外依赖）。"""
         self._mser = cv2.MSER_create(
-            _delta=3,           # MSER 变化阈值
-            _min_area=60,       # 最小区域（过滤噪声点）
-            _max_area=3000,     # 最大区域（过滤大块背景）
-            _max_variation=0.3, # 最大变化率
+            delta=3,           # MSER 变化阈值
+            min_area=60,       # 最小区域（过滤噪声点）
+            max_area=3000,     # 最大区域（过滤大块背景）
+            max_variation=0.3, # 最大变化率
         )
         log.info("[MSER] 初始化成功（仅区域检测，无文字识别）")
 
